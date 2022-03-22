@@ -1,0 +1,20 @@
+{
+  "name": "2k-tools",
+  "version": "0.0.1",
+  "description": "A set of tools to help view and edit files from various 2k games.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "bep713",
+  "license": "MIT",
+  "dependencies": {
+    "stream-parser": "^0.3.1"
+  },
+  "devDependencies": {
+    "chai": "^4.3.6",
+    "mocha": "^9.2.2",
+    "rewire": "^6.0.0",
+    "sinon": "^13.0.1"
+  }
+}
