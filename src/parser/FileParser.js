@@ -1,5 +1,6 @@
 const stream = require('stream');
 const Parser = require('stream-parser');
+const ProgressTracker = require('../model/general/ProgressTracker');
 
 class FileParser extends stream.Writable {
     constructor() {
@@ -8,6 +9,7 @@ class FileParser extends stream.Writable {
 
         this._file = null;
         this._currentBufferIndex = 0;
+        this._progressTracker = new ProgressTracker();
     };
 
     get file() {
@@ -22,6 +24,10 @@ class FileParser extends stream.Writable {
         return this._currentBufferIndex;
     };
 
+    get progressTracker() {
+        return this._progressTracker;
+    };
+
     bytes(bytesToRead, callback) {
         this._currentBufferIndex += bytesToRead;
         this._bytes(bytesToRead, callback);
@@ -30,6 +36,10 @@ class FileParser extends stream.Writable {
     skipBytes(bytesToSkip, callback) {
         this._currentBufferIndex += bytesToSkip;
         this._skipBytes(bytesToSkip, callback);
+    };
+
+    emitProgress(message) {
+        this.emit('progress', this.progressTracker.format(message));
     };
 };
 

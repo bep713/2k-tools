@@ -9,6 +9,9 @@
   "author": "bep713",
   "license": "MIT",
   "dependencies": {
+    "env-paths": "^2.2.1",
+    "make-dir": "^3.1.0",
+    "multistream": "^4.1.0",
     "stream-parser": "^0.3.1"
   },
   "devDependencies": {

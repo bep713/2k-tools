@@ -1,15 +1,12 @@
-const ArchiveTOC = require("./ArchiveTOC");
-
 class Archive {
     constructor() {
-        this.magic = 0;
-        this.alignment = 0;
-        this.numberOfArchives = 0;
+        this.sizeRaw = 0;
         this.zero = 0;
-        this.numberOfFiles = 0;
-        this.zero2 = 0;
+        this.name = '';
+    };
 
-        this.toc = new ArchiveTOC();
+    get size() {
+        return this.sizeRaw << 0xB;
     };
 };
 
