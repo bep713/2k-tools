@@ -88,7 +88,7 @@ class ChoopsController extends EventEmitter {
 
     // retrieve the raw buffer of a resource.
     async getResourceData(name) {
-        if (!name) { throw new Error('getResource() takes in a mandatory `name` parameter.'); }
+        if (!name) { throw new Error('getResourceData() takes in a mandatory `name` parameter.'); }
         if (!this.data) { throw new Error('No data loaded. You must call the `read` function before calling this function.'); }
 
         this.progressTracker.reset();
@@ -116,6 +116,7 @@ class ChoopsController extends EventEmitter {
             length: entry.size,
             position: entry.offset
         });
+        await fd.close();
 
         this.progressTracker.step();
         this._emitProgress(this.progressTracker.format('Done reading resource.'));
