@@ -5,6 +5,8 @@ class CacheEntry {
         this.size = 0;
         this.offset = 0;
         this.location = null;
+        this.isSplit = false;
+        this.splitSecondFileSize = 0;
     };
 };
 

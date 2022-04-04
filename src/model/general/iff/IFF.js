@@ -13,6 +13,7 @@ class IFF {
 
         this.files = [];
         this.blocks = [];
+        this.fileNameDefintions = [];
     };
 };
 

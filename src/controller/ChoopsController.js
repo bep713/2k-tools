@@ -1,15 +1,16 @@
 const fs = require('fs');
 const fsPromies = require('fs/promises');
-const { pipeline } = require('stream');
 const Multistream = require('multistream');
 const { EventEmitter } = require('events');
+const { pipeline, Readable } = require('stream');
 
 const cacheUtil = require('../util/cacheUtil');
 const gameFileUtil = require('../util/choops/choopsGameFileUtil');
 
+const IFFReader = require('../parser/IFFReader');
 const ChoopsReader = require('../parser/ChoopsReader');
-const ChoopsCacheEntry = require('../model/choops/ChoopsCacheEntry');
 const ProgressTracker = require('../model/general/ProgressTracker');
+const ChoopsCacheEntry = require('../model/choops/general/ChoopsCacheEntry');
 
 class ChoopsController extends EventEmitter {
     constructor(gameDirectoryPath) {
@@ -46,23 +47,28 @@ class ChoopsController extends EventEmitter {
     };
 
     async _read() {
+        let cachePromises = [];
+
         this.parser.on('progress', function (data) {
             this._emitProgress(data);
         }.bind(this));
 
-        this.parser.on('chunk', function (data) {
-            let cacheEntry = new ChoopsCacheEntry();
-            cacheEntry.id = data.meta.id;
-            cacheEntry.size = data.meta.size;
-            cacheEntry.unknown = data.meta.unk;
-            cacheEntry.name = data.meta.id.toString();
-            cacheEntry.rawOffset = data.meta.rawOffset;
-            cacheEntry.offset = data.meta.archiveOffset;
-            cacheEntry.location = data.meta.archiveIndex;
-
-            cacheEntry.setCurrentDataAsOriginal();
-
-            this.data.push(cacheEntry);
+        this.parser.on('chunk', async function (data) {
+            cachePromises.push(new Promise(async (resolve, reject) => {
+                let cacheEntry = new ChoopsCacheEntry();
+                cacheEntry.id = data.meta.id;
+                cacheEntry.size = data.meta.size;
+                cacheEntry.nameHash = data.meta.nameHash;
+                cacheEntry.name = data.meta.name;
+                cacheEntry.rawOffset = data.meta.rawOffset;
+                cacheEntry.offset = data.meta.archiveOffset;
+                cacheEntry.location = data.meta.archiveIndex;
+                cacheEntry.isSplit = data.meta.isSplit;
+                cacheEntry.splitSecondFileSize = data.meta.splitSecondFileSize;
+    
+                cacheEntry.setCurrentDataAsOriginal();
+                resolve(cacheEntry);
+            }));
         }.bind(this));
 
         const gameFilePaths = await gameFileUtil.getGameFilePaths(this.gameDirectoryPath);
@@ -80,6 +86,9 @@ class ChoopsController extends EventEmitter {
                 }
             );
         });
+
+        const cacheEntries = await Promise.all(cachePromises);
+        this.data = cacheEntries;
     };
 
     async _buildCache() {
@@ -87,7 +96,7 @@ class ChoopsController extends EventEmitter {
     };
 
     // retrieve the raw buffer of a resource.
-    async getResourceData(name) {
+    async getResourceRawData(name) {
         if (!name) { throw new Error('getResourceData() takes in a mandatory `name` parameter.'); }
         if (!this.data) { throw new Error('No data loaded. You must call the `read` function before calling this function.'); }
 
@@ -105,23 +114,73 @@ class ChoopsController extends EventEmitter {
         
         let entryBuf = Buffer.alloc(entry.size);
         const entryPath = await gameFileUtil.getGameFilePathByIndex(this.gameDirectoryPath, entry.location);
-        
+
         this.progressTracker.step();
         this._emitProgress(this.progressTracker.format(`Reading resource from path: ${entryPath} @ offset 0x${entry.offset.toString(16)}.`));
-        
-        const fd = await fsPromies.open(entryPath, 'r+');
-        await fd.read({
-            buffer: entryBuf,
-            offset: 0,
-            length: entry.size,
-            position: entry.offset
-        });
-        await fd.close();
+
+        await this._openAndReadFile(entryPath, entryBuf, entry.size, entry.offset);
+
+        if (entry.isSplit) {
+            let entryBuf2 = Buffer.alloc(entry.splitSecondFileSize);
+            const entryPath2 = await gameFileUtil.getGameFilePathByIndex(this.gameDirectoryPath, entry.location + 1);
+
+            this.progressTracker.totalSteps += 1;
+            this.progressTracker.step();
+            this._emitProgress(this.progressTracker.format(`Data is split between two files. Continuing to read from path: ${entryPath2} @ offset 0x0.`));
+
+            await this._openAndReadFile(entryPath2, entryBuf2, entry.splitSecondFileSize, 0);
+
+            entryBuf = entryBuf.slice(0, entry.size - entry.splitSecondFileSize);
+            entryBuf = Buffer.concat([entryBuf, entryBuf2]);
+        }
 
         this.progressTracker.step();
         this._emitProgress(this.progressTracker.format('Done reading resource.'));
 
         return entryBuf;
+    };
+
+    async _openAndReadFile(path, buf, length, offset) {
+        const fd = await fsPromies.open(path, 'r+');
+
+        await fd.read({
+            buffer: buf,
+            offset: 0,
+            length: length,
+            position: offset
+        });
+
+        await fd.close();
+    };
+
+    async getResource(name) {
+        const resourceRawData = await this.getResourceRawData(name);
+
+        if (resourceRawData.readUInt32BE(0) === 0xFF3BEF94) {
+            const resourceDataStream = Readable.from(resourceRawData);
+    
+            this.progressTracker.totalSteps += 1;
+            this._emitProgress(this.progressTracker.format('Parsing IFF...'));
+    
+            const file = await new Promise((resolve, reject) => {
+                const parser = new IFFReader();
+    
+                pipeline(
+                    resourceDataStream,
+                    parser,
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve(parser.file);
+                    }
+                )
+            });
+    
+            this._emitProgress(this.progressTracker.format('Done parsing IFF.'));
+            return file;
+        }
+        else {
+            return resourceRawData;
+        }
     };
 
     _emitProgress(message) {

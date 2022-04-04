@@ -1,9 +1,9 @@
-const CacheEntry = require("../general/CacheEntry");
+const CacheEntry = require("../../general/CacheEntry");
 
 class ChoopsCacheEntry extends CacheEntry {
     constructor() {
         super();
-        this.unknown = 0;
+        this.nameHash = 0;
         this.rawOffset = 0;
         this.original = {};
     };
@@ -13,9 +13,11 @@ class ChoopsCacheEntry extends CacheEntry {
         this.original.size = this.size;
         this.original.name = this.name;
         this.original.offset = this.offset;
+        this.original.isSplit = this.isSplit;
         this.original.unknown = this.unknown;
         this.original.location = this.location;
         this.original.rawOffset = this.rawOffset;
+        this.original.splitSecondFileSize = this.splitSecondFileSize;
     };
 };
 

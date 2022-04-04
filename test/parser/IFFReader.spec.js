@@ -1,17 +1,31 @@
-const { expect } = require('chai');
 const fs = require('fs');
 const path = require('path');
+const { expect } = require('chai');
 const { pipeline } = require('stream');
+
 const IFFReader = require('../../src/parser/IFFReader');
+const IFFType = require('../../src/model/general/iff/IFFType');
 
 const PATH_TO_SIMPLE_IFF = path.join(__dirname, '../data/iff/simple.iff');
+const PATH_TO_TWO_FILE_IFF = path.join(__dirname, '../data/iff/two-files.iff');
 
 describe('IFFReader tests', () => {
     describe('simple IFF', () => {
-        let reader, iff;
+        let reader, iff, emittedBlockData, emittedFileData;
 
         beforeEach(async () => {
+            emittedBlockData = [];
+            emittedFileData = [];
+
             reader = new IFFReader();
+
+            reader.on('block-data', (data) => {
+                emittedBlockData.push(data);
+            });
+
+            reader.on('file-data', (data) => {
+                emittedFileData.push(data);
+            });
 
             await new Promise((resolve, reject) => {
                 pipeline(
@@ -50,6 +64,105 @@ describe('IFFReader tests', () => {
             expect(firstBlock.startOffset).to.equal(0x54);
             expect(firstBlock.compressedLength).to.equal(0x37A4);
             expect(firstBlock.isIndexed).to.equal(0x0);
+        });
+
+        it('expected files', () => {
+            expect(iff.files.length).to.equal(1);
+
+            const firstFile = iff.files[0];
+            expect(firstFile.id).to.equal(0xCFE58145);
+            expect(firstFile.name).to.equal('hi_shoe1\0');
+            expect(firstFile.typeRaw).to.equal(0xE26C9B5D);
+            expect(firstFile.type).to.equal(IFFType.TYPES.SCNE);
+            expect(firstFile.offsetCount).to.equal(1);
+            expect(firstFile.dataBlocks.length).to.equal(1);
+            expect(firstFile.dataBlocks[0].offset).to.equal(0);
+        });
+
+        it('outputs events for each block', () => {
+            expect(emittedBlockData.length).to.equal(1);
+            expect(emittedBlockData[0]).to.eql(iff.blocks[0]);
+            expect(emittedBlockData[0].data.length).to.equal(iff.blocks[0].uncompressedLength);
+        });
+
+        it('does not decompress blocks if flag is set', async () => {
+            emittedBlockData = [];
+
+            reader = new IFFReader({
+                decompressBlocks: false
+            });
+
+            reader.on('block-data', (data) => {
+                emittedBlockData.push(data);
+            });
+
+            await new Promise((resolve, reject) => {
+                pipeline(
+                    fs.createReadStream(PATH_TO_SIMPLE_IFF),
+                    reader,
+                    (err) => {
+                        if (err) { reject(err); }
+                        else { resolve(); }
+                    }
+                );
+            });
+
+            expect(emittedBlockData.length).to.equal(1);
+            expect(emittedBlockData[0].data.length).to.equal(iff.blocks[0].compressedLength)
+        });
+
+        it('outputs an event for each file', () => {
+            expect(emittedFileData.length).to.equal(1);
+            expect(emittedFileData[0]).to.eql(iff.files[0]);
+            expect(emittedFileData[0].dataBlocks[0].data.length).to.equal(iff.blocks[0].uncompressedLength);
+        });
+    });
+
+    describe('two file IFF', () => {
+        let reader, iff, emittedBlockData, emittedFileData;
+
+        beforeEach(async () => {
+            emittedBlockData = [];
+            emittedFileData = [];
+
+            reader = new IFFReader();
+
+            reader.on('block-data', (data) => {
+                emittedBlockData.push(data);
+            });
+
+            reader.on('file-data', (data) => {
+                emittedFileData.push(data);
+            });
+
+            await new Promise((resolve, reject) => {
+                pipeline(
+                    fs.createReadStream(PATH_TO_TWO_FILE_IFF),
+                    reader,
+                    (err) => {
+                        if (err) { reject(err); }
+                        else { resolve(); }
+                    }
+                );
+            });
+
+            iff = reader.file;
+        });
+
+        it('expected files', () => {
+            expect(iff.files.length).to.equal(2);
+
+            const firstFile = iff.files[0];
+            expect(firstFile.name).to.equal('shoe_sole\0');
+            expect(firstFile.type).to.equal(IFFType.TYPES.TXTR);
+            expect(firstFile.dataBlocks[0].length).to.equal(176);
+            expect(firstFile.dataBlocks[1].length).to.equal(4096);
+
+            const secondFile = iff.files[1];
+            expect(secondFile.name).to.equal('shoe_upper\0');
+            expect(secondFile.type).to.equal(IFFType.TYPES.TXTR);
+            expect(secondFile.dataBlocks[0].length).to.equal(176);
+            expect(secondFile.dataBlocks[1].length).to.equal(32768);
         });
     });
 });

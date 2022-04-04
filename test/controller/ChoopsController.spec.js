@@ -36,6 +36,21 @@ describe('Choops2k8 controller tests', () => {
         await controller.read();
 
         expect(controller.data.length).to.equal(TOTAL_NUM_RESOURCES);
+
+        const cache = await cacheUtil.getCache(cacheUtil.CACHES.CHOOPS.cache);
+        const namedCaches = cache.filter((cacheEntry) => {
+            return cacheEntry.name.length > 5;
+        }).map((cacheEntry) => {
+            return {
+                index: cacheEntry.id,
+                nameHash: cacheEntry.nameHash,
+                name: cacheEntry.name
+            }
+        }).sort((a, b) => {
+            return a.index - b.index;
+        });
+
+        console.log(namedCaches);
     });
 
     it('can retrieve resource data', async function () {
@@ -49,7 +64,37 @@ describe('Choops2k8 controller tests', () => {
 
         await controller.read();
 
-        const firstResource = await controller.getResourceData('0');
+        const firstResource = await controller.getResourceRawData('0');
         expect(firstResource.length).to.equal(0x30);
+    });
+
+    it('can retrieve resource data by decoded hash name', async function () {
+        this.timeout(30000);
+
+        let controller = new ChoopsController(PATH_TO_CHOOPS_ARCHIVE_FOLDER);
+
+        controller.on('progress', (message) => {
+            console.log(message.message);
+        });
+
+        await controller.read();
+
+        const firstResource = await controller.getResourceRawData('global.iff');
+        expect(firstResource.length).to.equal(0x1EED911);
+    });
+
+    it('can retrieve a parsed resource', async function () {
+        this.timeout(30000);
+
+        let controller = new ChoopsController(PATH_TO_CHOOPS_ARCHIVE_FOLDER);
+
+        controller.on('progress', (message) => {
+            console.log(message.message);
+        });
+
+        await controller.read();
+
+        const global = await controller.getResource('global.iff');
+        expect(global.files)
     });
 });

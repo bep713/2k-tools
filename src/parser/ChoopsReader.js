@@ -1,5 +1,7 @@
 const { Readable } = require('stream');
 
+const hashUtil = require('../util/2kHashUtil');
+
 const FileParser = require('./FileParser');
 const Archive = require('../model/choops/archive/Archive');
 const GameArchive = require('../model/choops/archive/GameArchive');
@@ -60,15 +62,27 @@ class ChoopsReader extends FileParser {
         for (let i = 0; i < this.archive.numberOfFiles; i++) {
             const tocEntry = new ArchiveTOCEntry();
             tocEntry.id = i;
-            tocEntry.unk = buf.readUInt32BE(currentOffset);
+            tocEntry.nameHash = buf.readUInt32BE(currentOffset);
             tocEntry.rawOffset = buf.readUInt32BE(currentOffset + 4);
             tocEntry.offset = tocEntry.rawOffset * this.archive.alignment;
             tocEntry.zero = buf.readUInt32BE(currentOffset + 8);
             tocEntry.size = buf.readUInt32BE(currentOffset + 12);
 
-            const archiveDetails = this._getArchiveDetailsFromOffset(tocEntry.offset);
+            hashUtil.hashLookup(tocEntry.nameHash)
+                .then((name) => {
+                    if (name) {
+                        tocEntry.name = name.str;
+                    }
+                    else {
+                        tocEntry.name = tocEntry.id.toString();
+                    }
+                });
+
+            const archiveDetails = this._getArchiveDetailsFromOffset(tocEntry.offset, tocEntry.size);
             tocEntry.archiveIndex = archiveDetails.index;
             tocEntry.archiveOffset = archiveDetails.offset;
+            tocEntry.isSplit = archiveDetails.isSplit;
+            tocEntry.splitSecondFileSize = archiveDetails.splitSecondFileSize;
 
             this.archive.toc.push(tocEntry);
             currentOffset += 16;
@@ -120,10 +134,12 @@ class ChoopsReader extends FileParser {
         }
     };
 
-    _getArchiveDetailsFromOffset(offset) {
+    _getArchiveDetailsFromOffset(offset, size) {
         let runningOffset = 0;
         let archiveFileIndex = 0;
         let archiveOffset = 0;
+        let isSplit = false;
+        let splitSecondFileSize = 0;
 
         for (let i = 0; i < this.archive.archives.length; i++) {
             runningOffset += this.archive.archives[i].size;
@@ -131,13 +147,21 @@ class ChoopsReader extends FileParser {
             if (offset < runningOffset) {
                 archiveFileIndex = i;
                 archiveOffset = offset - (runningOffset - this.archive.archives[i].size);
+
+                if (archiveOffset + size > runningOffset) {
+                    isSplit = true;
+                    splitSecondFileSize = size - (runningOffset - archiveOffset);
+                }
+                
                 break;
             }
         }
 
         return {
             index: archiveFileIndex,
-            offset: archiveOffset
+            offset: archiveOffset,
+            isSplit: isSplit,
+            splitSecondFileSize: splitSecondFileSize
         };
     };
 
@@ -158,7 +182,7 @@ class ChoopsReader extends FileParser {
         this.bytes(this.archive.toc[index].size, function (buf) {
             return this._onChunk(buf, index);
         });
-    }
+    };
 };
 
 module.exports = ChoopsReader;

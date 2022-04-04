@@ -62,31 +62,49 @@ describe('ChoopsParser unit tests', () => {
         expect(toc.length).to.equal(3376);
 
         const firstToc = toc[0];
-        expect(firstToc.unk).to.equal(0xB4720031);
+        expect(firstToc.nameHash).to.equal(0xB4720031);
+        expect(firstToc.name).to.equal('loading.iff');
         expect(firstToc.rawOffset).to.equal(0x1B);
         expect(firstToc.offset).to.equal(0xD800);
         expect(firstToc.zero).to.equal(0x0);
         expect(firstToc.size).to.equal(0x1594B6);
         expect(firstToc.archiveIndex).to.equal(0);
         expect(firstToc.archiveOffset).to.equal(0xD800);
+        expect(firstToc.isSplit).to.equal(false);
+        expect(firstToc.splitSecondFileSize).to.equal(0);
 
         const toc400 = toc[400];
-        expect(toc400.unk).to.equal(0x361636C3);
+        expect(toc400.nameHash).to.equal(0x361636C3);
+        expect(toc400.name).to.equal('711');
         expect(toc400.rawOffset).to.equal(0xD3691);
         expect(toc400.offset).to.equal(0x69B48800)
         expect(toc400.zero).to.equal(0x0);
         expect(toc400.size).to.equal(0x30);
         expect(toc400.archiveIndex).to.equal(1);
         expect(toc400.archiveOffset).to.equal(0x29B48800);
+        expect(toc400.isSplit).to.equal(false);
+        expect(toc400.splitSecondFileSize).to.equal(0);
+
+        const global = toc.find((theToc) => {
+            return theToc.name === 'global.iff';
+        });
+
+        expect(global.archiveIndex).to.equal(0);
+        expect(global.archiveOffset).to.equal(0x3EEAE800);
+        expect(global.isSplit).to.equal(true);
+        expect(global.splitSecondFileSize).to.equal(0xD9C111);
 
         const lastToc = toc[3375];
-        expect(lastToc.unk).to.equal(0xEA4B7257);
+        expect(lastToc.nameHash).to.equal(0xEA4B7257);
+        expect(lastToc.name).to.equal('weeklyshow.iff');
         expect(lastToc.rawOffset).to.equal(0x23D57E);
         expect(lastToc.offset).to.equal(0x11EABF000);
         expect(lastToc.zero).to.equal(0x0);
         expect(lastToc.size).to.equal(0x988B4);
         expect(lastToc.archiveIndex).to.equal(4);
         expect(lastToc.archiveOffset).to.equal(0x1EABF000);
+        expect(lastToc.isSplit).to.equal(false);
+        expect(lastToc.splitSecondFileSize).to.equal(0);
     });
 
     describe('emits chunks', () => {
@@ -102,8 +120,12 @@ describe('ChoopsParser unit tests', () => {
                     offset: 2888611840,
                     rawOffset: 1410455,
                     size: 2925604,
-                    unk: 1569367355,
-                    zero: 0
+                    nameHash: 1569367355,
+                    zero: 0,
+                    isSplit: false,
+                    splitSecondFileSize: 0,
+                    name: '1229',
+                    id: 1229
                 }
             });
         });
