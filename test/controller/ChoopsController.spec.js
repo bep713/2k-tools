@@ -95,6 +95,7 @@ describe('Choops2k8 controller tests', () => {
         await controller.read();
 
         const global = await controller.getResource('global.iff');
-        expect(global.files)
+        expect(global.files.length).to.equal(0x25B);
+        expect(global.files[0].name).to.equal('controller_small\0');
     });
 });
