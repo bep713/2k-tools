@@ -64,7 +64,7 @@ describe('Choops2k8 controller tests', () => {
 
         await controller.read();
 
-        const firstResource = await controller.getResourceRawData('0');
+        const firstResource = await controller.getFileRawData('0');
         expect(firstResource.length).to.equal(0x30);
     });
 
@@ -79,7 +79,7 @@ describe('Choops2k8 controller tests', () => {
 
         await controller.read();
 
-        const firstResource = await controller.getResourceRawData('global.iff');
+        const firstResource = await controller.getFileRawData('global.iff');
         expect(firstResource.length).to.equal(0x1EED911);
     });
 
@@ -94,8 +94,8 @@ describe('Choops2k8 controller tests', () => {
 
         await controller.read();
 
-        const global = await controller.getResource('global.iff');
-        expect(global.files.length).to.equal(0x25B);
-        expect(global.files[0].name).to.equal('controller_small\0');
+        const global = await controller.getFileController('global.iff');
+        expect(global.file.files.length).to.equal(0x25B);
+        expect(global.file.files[0].name).to.equal('controller_small\0');
     });
 });

@@ -45,3 +45,32 @@ module.exports.stringToType = (str) => {
             return this.TYPES.UNKNOWN;
     }
 };
+
+module.exports.typeToString = (type) => {
+    switch (type) {
+        case this.TYPES.TXTR:
+            return 'TXTR';
+        case this.TYPES.SCNE:
+            return 'SCNE';
+        case this.TYPES.AUDO:
+            return 'AUDO';
+        case this.TYPES.LAYT:
+            return 'LAYT';
+        case this.TYPES.MRKS:
+            return 'MRKS';
+        case this.TYPES.PRIV:
+            return 'PRIV';
+        case this.TYPES.TXT:
+            return 'TXT';
+        case this.TYPES.DRCT:
+            return 'DRCT';
+        case this.TYPES.CLTH:
+            return 'CLTH';
+        case this.TYPES.AMBO:
+            return 'AMBO';
+        case this.TYPES.HILT:
+            return 'HILT';
+        default:
+            return 'UNKNOWN';
+    }
+};

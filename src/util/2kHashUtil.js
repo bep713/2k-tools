@@ -6,21 +6,23 @@ const heapUtil = require('./choops/choopsHeapUtil.js');
 
 let heapData, hashLookup;
 
-let heapPromise = new Promise(async (resolve, reject) => {
+module.exports.heapPromise = new Promise(async (resolve, reject) => {
     heapData = await heapUtil.getHeap()
     resolve();
 });
 
 const PATH_TO_HASHLOOKUP = path.join(__dirname, '../data/hash-lookup.json');
 
-let hashLookupPromise = new Promise(async (resolve, reject) => {
-    hashLookup = await fs.readFile(PATH_TO_HASHLOOKUP);
+module.exports.hashLookupPromise = new Promise(async (resolve, reject) => {
+    hashLookup = await fs.readFile(PATH_TO_HASHLOOKUP, 'utf-8');
     hashLookup = JSON.parse(hashLookup);
     resolve();
 });
 
 module.exports.hash = async (stringToHash, initialHash) => {
-    await heapPromise;
+    await this.heapPromise;
+    await this.hashLookupPromise;
+
     let upperString = stringToHash.toUpperCase();
 
     let tempData;
@@ -48,7 +50,7 @@ function rldic(theLong, shift, maskBit) {
 };
 
 module.exports.hashLookup = async (hash) => {
-    await hashLookupPromise;
+    await this.hashLookupPromise;
     return hashLookup.find(item => {
         return item.hash === hash;
     });

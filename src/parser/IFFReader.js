@@ -1,19 +1,19 @@
-const { Readable } = require('stream');
-
 const FileParser = require('./FileParser');
 const IFF = require('../model/general/iff/IFF');
 const IFFBlock = require('../model/general/iff/IFFBlock');
+const IFFController = require('../controller/IFFController');
 const IFFDataFile = require('../model/general/iff/IFFDataFile');
+const IFFDataFileBlock = require('../model/general/iff/IFFDataFileBlock');
 
 const h7aCompressionUtil = require('../util/h7aCompressionUtil');
-const IFFDataFileBlock = require('../model/general/iff/IFFDataFileBlock');
 const IFFType = require('../model/general/iff/IFFType');
 
 class IFFReader extends FileParser {
     constructor(options) {
         super();
 
-        this.file = new IFF();
+        this.controller = new IFFController();
+        this.file = this.controller.file;
         this.decompressBlocks = options && options.decompressBlocks !== undefined ? options.decompressBlocks : true;
 
         this.bytes(0x20, this._onFileHeader);
@@ -29,7 +29,12 @@ class IFFReader extends FileParser {
         this.file.fileCount = buf.readUInt32BE(24);
         this.file.unk2 = buf.readUInt32BE(28);
 
-        this.bytes(this.file.blockCount * 0x20, this._onFileBlocks);
+        if (this.file.blockCount > 0) {
+            this.bytes(this.file.blockCount * 0x20, this._onFileBlocks);
+        }
+        else {
+            this.skipBytes(Infinity);
+        }
     };
 
     _onFileBlocks(buf) {
@@ -55,8 +60,9 @@ class IFFReader extends FileParser {
             return a.startOffset - b.startOffset;
         });
 
-        // skip data file offsets
-        this.skipBytes(this.file.fileCount * 4, function () {
+        this.bytes(this.file.fileCount * 4, function (buf) {
+            this.file.dataFileOffsetBuf = buf;
+            
             this.bytes(this.file.headerSize - this.currentBufferIndex, this._onDataHeaderBlocks);
         }.bind(this));
     };
@@ -84,6 +90,10 @@ class IFFReader extends FileParser {
         this.file.blocks.forEach((block, blockIndex) => {
             const filesInThisBlock = this.file.files.filter(file => {
                 return file.offsetCount >= (blockIndex + 1);
+            });
+
+            filesInThisBlock.sort((a, b) => {
+                return a.dataBlocks[blockIndex].offset - b.dataBlocks[blockIndex].offset;
             });
 
             if (filesInThisBlock.length === 1) {
@@ -135,9 +145,6 @@ class IFFReader extends FileParser {
             const decompressedBuf = this._decompressBlockData(buf, block);
             block.data = decompressedBuf;
         }
-        else if (!block.isCompressed) {
-            blockDataToEmit.uncompressedData = buf;
-        }
 
         this.emit('block-data', block);
 
@@ -156,6 +163,7 @@ class IFFReader extends FileParser {
         const unk = buf.readUInt32BE(12);
         const shiftAmount = buf.readUInt32BE(16);
 
+        block.compressedLength = block.uncompressedLength;
         return h7aCompressionUtil.decompress(buf.slice(20), uncompressedLength, shiftAmount);
     };
 
@@ -163,10 +171,19 @@ class IFFReader extends FileParser {
         const magic = buf.readUInt32BE(0);
         const size = buf.readUInt32LE(4);
 
-        this.bytes(size, this._onFileNameDefinitions);
+        this.file.nameDataBuf = buf;
+
+        if (size > 0) {
+            this.bytes(size, this._onFileNameDefinitions);
+        }
+        else {
+            this.skipBytes(Infinity);
+        }
     };
 
     _onFileNameDefinitions(buf) {
+        this.file.nameDataBuf = Buffer.concat([this.file.nameDataBuf, buf]);
+
         const numNames = buf.readUInt32LE(0);
         const offsetToNames = buf.readUInt32LE(4) + 4 - 1;  // offsets are relative to their starting position - 1. So this offset is at 4 and then we subtract 1.
         let currentOffset = offsetToNames;
@@ -179,6 +196,8 @@ class IFFReader extends FileParser {
             this.file.files[i].name = buf.toString('utf16le', offsetToName, offsetToType);
             const type = buf.toString('utf16le', offsetToType, offsetToType + 10);
             this.file.files[i].type = IFFType.stringToType(type);
+
+            this.file.files[i].name = this.file.files[i].name.slice(0, this.file.files[i].name.length - 1);
 
             currentOffset += 4;
         }

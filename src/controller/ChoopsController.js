@@ -96,7 +96,7 @@ class ChoopsController extends EventEmitter {
     };
 
     // retrieve the raw buffer of a resource.
-    async getResourceRawData(name) {
+    async getFileRawData(name) {
         if (!name) { throw new Error('getResourceData() takes in a mandatory `name` parameter.'); }
         if (!this.data) { throw new Error('No data loaded. You must call the `read` function before calling this function.'); }
 
@@ -153,8 +153,8 @@ class ChoopsController extends EventEmitter {
         await fd.close();
     };
 
-    async getResource(name) {
-        const resourceRawData = await this.getResourceRawData(name);
+    async getFileController(name) {
+        const resourceRawData = await this.getFileRawData(name);
 
         if (resourceRawData.readUInt32BE(0) === 0xFF3BEF94) {
             const resourceDataStream = Readable.from(resourceRawData);
@@ -162,7 +162,7 @@ class ChoopsController extends EventEmitter {
             this.progressTracker.totalSteps += 1;
             this._emitProgress(this.progressTracker.format('Parsing IFF...'));
     
-            const file = await new Promise((resolve, reject) => {
+            const controller = await new Promise((resolve, reject) => {
                 const parser = new IFFReader();
     
                 pipeline(
@@ -170,13 +170,13 @@ class ChoopsController extends EventEmitter {
                     parser,
                     (err) => {
                         if (err) reject(err);
-                        else resolve(parser.file);
+                        else resolve(parser.controller);
                     }
                 )
             });
     
             this._emitProgress(this.progressTracker.format('Done parsing IFF.'));
-            return file;
+            return controller;
         }
         else {
             return resourceRawData;
