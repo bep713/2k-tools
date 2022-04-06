@@ -175,6 +175,7 @@ class ChoopsController extends EventEmitter {
                 )
             });
     
+            this.progressTracker.step();
             this._emitProgress(this.progressTracker.format('Done parsing IFF.'));
             return controller;
         }

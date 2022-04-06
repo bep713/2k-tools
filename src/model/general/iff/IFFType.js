@@ -10,7 +10,8 @@ module.exports.TYPES = {
     DRCT: 8,
     CLTH: 9,
     AMBO: 10,
-    HILT: 11
+    HILT: 11,
+    NAME: 12
 };
 
 module.exports.stringToType = (str) => {
@@ -41,6 +42,8 @@ module.exports.stringToType = (str) => {
             return this.TYPES.AMBO;
         case 'HILT':
             return this.TYPES.HILT;
+        case 'NAME':
+            return this.TYPES.NAME;
         default:
             return this.TYPES.UNKNOWN;
     }
@@ -70,6 +73,8 @@ module.exports.typeToString = (type) => {
             return 'AMBO';
         case this.TYPES.HILT:
             return 'HILT';
+        case this.TYPES.NAME:
+            return 'NAME';
         default:
             return 'UNKNOWN';
     }
