@@ -47,7 +47,8 @@ class ChoopsTextureReader {
     
                 await fs.writeFile(tempGtfFileName, gtfBuffer);
     
-                exec(`${path.join(__dirname, '../../../lib/gtf2dds.exe')} -o ${tempDdsFileName} ${tempGtfFileName}`, async (err, out, stderr) => {
+                const pathToGtfExe = process.pkg ? 'gtf2dds.exe' : path.join(__dirname, '../../../lib/gtf2dds.exe');
+                exec(`${pathToGtfExe} -o ${tempDdsFileName} ${tempGtfFileName}`, async (err, out, stderr) => {
                     if (err) {
                         reject(err);
                     }

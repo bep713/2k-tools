@@ -95,6 +95,18 @@ class ChoopsController extends EventEmitter {
         await cacheUtil.buildAndSaveCache(cacheUtil.CACHES.CHOOPS.cache, this.data);
     };
 
+    getEntryByName(name) {
+        const entry = this.data.find((entry) => {
+            return entry.name.toLowerCase() === name.toLowerCase();
+        });
+
+        if (!entry) {
+            throw new Error(`Cannot find a resource in the cache with name ${name}.`);
+        }
+
+        return entry;
+    };
+
     // retrieve the raw buffer of a resource.
     async getFileRawData(name) {
         if (!name) { throw new Error('getResourceData() takes in a mandatory `name` parameter.'); }
@@ -104,13 +116,7 @@ class ChoopsController extends EventEmitter {
         this.progressTracker.totalSteps = 2;
         this._emitProgress(this.progressTracker.format('Searching for entry in cache...'));
 
-        const entry = this.data.find((entry) => {
-            return entry.name.toLowerCase() === name.toLowerCase();
-        });
-
-        if (!entry) {
-            throw new Error(`Cannot find a resource in the cache with name ${name}.`);
-        }
+        const entry = this.getEntryByName(name);
         
         let entryBuf = Buffer.alloc(entry.size);
         const entryPath = await gameFileUtil.getGameFilePathByIndex(this.gameDirectoryPath, entry.location);
@@ -162,7 +168,7 @@ class ChoopsController extends EventEmitter {
             this.progressTracker.totalSteps += 1;
             this._emitProgress(this.progressTracker.format('Parsing IFF...'));
     
-            const controller = await new Promise((resolve, reject) => {
+            let controller = await new Promise((resolve, reject) => {
                 const parser = new IFFReader();
     
                 pipeline(
