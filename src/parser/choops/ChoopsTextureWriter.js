@@ -22,8 +22,6 @@ class ChoopsTextureWriter {
         file.dataBlocks[0].data.writeUInt32BE(gtfData.readUInt32BE(0x24), 0x64);
         file.dataBlocks[0].data.writeUInt32BE(gtfData.readUInt32BE(0x28), 0x68);
         file.dataBlocks[0].data.writeUInt32BE(gtfData.readUInt32BE(0x2C), 0x6C);
-        file.dataBlocks[0].data.writeUInt32BE(gtfData.readUInt32BE(0x30), 0x70);
-        file.dataBlocks[0].data.writeUInt32BE(gtfData.readUInt32BE(0x34), 0x74);
 
         const offsetToTexture = gtfData.readUInt32BE(0x10);
 
@@ -41,11 +39,13 @@ class ChoopsTextureWriter {
             const tempGtfFileName = path.join(envPath.temp, `${fileNameFormatted}.gtf`);
 
             const pathToGtfExe = process.pkg ? 'dds2gtf.exe' : path.join(__dirname, '../../../lib/dds2gtf.exe');
-            exec(`${pathToGtfExe} -o ${tempGtfFileName} ${tempDdsFileName}`, async (err, out, stderr) => {
+            exec(`${pathToGtfExe} -v -z -o ${tempGtfFileName} ${tempDdsFileName}`, async (err, out, stderr) => {
                 if (err) {
                     console.log(err);
                     reject(err);
                 }
+
+                console.log(out);
 
                 const gtfData = await fs.readFile(tempGtfFileName);
 

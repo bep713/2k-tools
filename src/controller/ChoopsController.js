@@ -8,7 +8,8 @@ const cacheUtil = require('../util/cacheUtil');
 const gameFileUtil = require('../util/choops/choopsGameFileUtil');
 
 const IFFReader = require('../parser/IFFReader');
-const ChoopsReader = require('../parser/ChoopsReader');
+const ChoopsReader = require('../parser/choops/ChoopsReader');
+const ChoopsCache = require('../model/choops/general/ChoopsCache');
 const ProgressTracker = require('../model/general/ProgressTracker');
 const ChoopsCacheEntry = require('../model/choops/general/ChoopsCacheEntry');
 
@@ -17,6 +18,7 @@ class ChoopsController extends EventEmitter {
         super();
 
         this.data = [];
+        this.cache = null;
         this.parser = new ChoopsReader();
         this.gameDirectoryPath = gameDirectoryPath;
         this.progressTracker = new ProgressTracker();
@@ -34,11 +36,13 @@ class ChoopsController extends EventEmitter {
         else {
             try {
                 this._emitProgress(this.progressTracker.format('Cache found, reading data from cache...'));
-                this.data = await cacheUtil.getCache(cacheUtil.CACHES.CHOOPS.cache);
+                this.cache = await cacheUtil.getCache(cacheUtil.CACHES.CHOOPS.cache);
+                this.data = this.cache.tocCache;
             }
             catch (err) {
                 this._emitProgress(this.progressTracker.format('Cache not found or empty, reading and building cache...'));
                 await this._read();
+                await this._buildCache();
             }
         }
 
@@ -92,7 +96,11 @@ class ChoopsController extends EventEmitter {
     };
 
     async _buildCache() {
-        await cacheUtil.buildAndSaveCache(cacheUtil.CACHES.CHOOPS.cache, this.data);
+        let cache = new ChoopsCache();
+        cache.tocCache = this.data;
+        cache.archiveCache = this.parser.archive;
+
+        await cacheUtil.buildAndSaveCache(cacheUtil.CACHES.CHOOPS.cache, cache);
     };
 
     getEntryByName(name) {
@@ -188,6 +196,10 @@ class ChoopsController extends EventEmitter {
         else {
             return resourceRawData;
         }
+    };
+
+    async repack() {
+        
     };
 
     _emitProgress(message) {

@@ -1,11 +1,11 @@
 const { Readable } = require('stream');
 
-const hashUtil = require('../util/2kHashUtil');
+const hashUtil = require('../../util/2kHashUtil');
 
-const FileParser = require('./FileParser');
-const Archive = require('../model/choops/archive/Archive');
-const GameArchive = require('../model/choops/archive/GameArchive');
-const ArchiveTOCEntry = require('../model/choops/archive/ArchiveTOCEntry');
+const FileParser = require('../FileParser');
+const Archive = require('../../model/choops/archive/Archive');
+const GameArchive = require('../../model/choops/archive/GameArchive');
+const ArchiveTOCEntry = require('../../model/choops/archive/ArchiveTOCEntry');
 
 class ChoopsReader extends FileParser {
     constructor(options) {

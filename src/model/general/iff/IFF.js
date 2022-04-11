@@ -29,14 +29,20 @@ class IFF {
 
             let blockData = [];
 
-            this.files.forEach((file) => {
-                if (file.dataBlocks.length > blockIndex) {
-                    let fileBlock = file.dataBlocks[blockIndex];
-                    
-                    fileBlock.offset = blockLength;
-                    blockLength += fileBlock.data.length;
-                    blockData.push(fileBlock.data);
-                }
+            const filesInThisBlock = this.files.filter(file => {
+                return file.offsetCount >= (blockIndex + 1);
+            });
+
+            filesInThisBlock.sort((a, b) => {
+                return a.dataBlocks[blockIndex].index - b.dataBlocks[blockIndex].index;
+            });
+
+            filesInThisBlock.forEach((file) => {
+                let fileBlock = file.dataBlocks[blockIndex];
+                
+                fileBlock.offset = blockLength;
+                blockLength += fileBlock.data.length;
+                blockData.push(fileBlock.data);
             });
 
             block.data = Buffer.concat(blockData);

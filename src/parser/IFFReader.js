@@ -96,6 +96,10 @@ class IFFReader extends FileParser {
                 return a.dataBlocks[blockIndex].offset - b.dataBlocks[blockIndex].offset;
             });
 
+            filesInThisBlock.forEach((file, index) => {
+                file.dataBlocks[blockIndex].index = index;
+            });
+
             if (filesInThisBlock.length === 1) {
                 filesInThisBlock[0].dataBlocks[blockIndex].length = block.uncompressedLength;
             }
@@ -140,6 +144,10 @@ class IFFReader extends FileParser {
 
     _onBlockData(buf, block) {
         block.data = buf;
+
+        if (!block.isCompressed) {
+            console.log('not compressed');
+        }
 
         if (block.isCompressed && this.decompressBlocks) {
             const decompressedBuf = this._decompressBlockData(buf, block);

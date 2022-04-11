@@ -4,7 +4,7 @@ const { expect } = require('chai');
 const { pipeline } = require('stream');
 const Multistream = require('multistream');
 
-const ChoopsReader = require('../../src/parser/ChoopsReader');
+const ChoopsReader = require('../../../src/parser/choops/ChoopsReader');
 
 const PATH_TO_CHOOPS_ARCHIVE_FOLDER = 'D:\\Media\\Games\\College Hoops 2K8 [U] [BLUS-30078] - Copy\\PS3_GAME\\USRDIR';
 
