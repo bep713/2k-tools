@@ -9,11 +9,21 @@ class IFFBlock {
         this.startOffset = 0;
         this.compressedLength = 0;
         this.isIndexed = 0;
-        this.data = null;
+        this._data = null;
+        this.isChanged = false;
     };
 
     get isCompressed() {
         return this.uncompressedLength !== this.compressedLength;
+    };
+
+    set data(data) {
+        this._data = data;
+        this.isChanged = true;
+    };
+
+    get data() {
+        return this._data;
     };
 };
 

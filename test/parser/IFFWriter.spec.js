@@ -9,6 +9,8 @@ const IFFWriter = require('../../src/parser/IFFWriter');
 let outputBuffer = null, outputBuffers = [];
 const PATH_TO_SIMPLE_IFF = path.join(__dirname, '../data/iff/simple.iff');
 
+let writer = new IFFWriter();
+
 describe('IFF Writer tests', () => {
     before(async () => {
         await new Promise(async (resolve, reject) => {
@@ -25,13 +27,14 @@ describe('IFF Writer tests', () => {
                 );
             });
 
-            const writer = new IFFWriter(file);
+            writer = new IFFWriter(file);
+            const stream = writer.createStream();
             
-            writer.on('data', (chunk) => {
+            stream.on('data', (chunk) => {
                 outputBuffers.push(chunk);
             });
 
-            writer.on('end', () => {
+            stream.on('end', () => {
                 outputBuffer = Buffer.concat(outputBuffers);
                 resolve();
             });
@@ -81,5 +84,9 @@ describe('IFF Writer tests', () => {
 
     it('expected file size', () => {
         expect(outputBuffer.length).to.equal(0x5A0E);
+    });
+
+    it('expected length in archive', () => {
+        expect(writer.lengthInArchive).to.equal(0x5A0E);
     });
 });

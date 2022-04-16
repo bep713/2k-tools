@@ -8,6 +8,7 @@ const ChoopsController = require('../../../src/controller/ChoopsController');
 const ChoopsTocWriter = require('../../../src/parser/choops/ChoopsTocWriter');
 
 const PATH_TO_CHOOPS_ARCHIVE_FOLDER = 'C:\\Users\\Public\\Public Games\\College Hoops 2K8 [U] [BLUS-30078]\\PS3_GAME\\USRDIR';
+let writer = new ChoopsTocWriter();
 
 describe('Choops TOC Writer tests', () => {
     let outputBuffer, outputBuffers = [];
@@ -25,13 +26,14 @@ describe('Choops TOC Writer tests', () => {
         });
         
         await new Promise(async (resolve, reject) => {
-            const writer = new ChoopsTocWriter(controller.cache.archiveCache);
+            writer = new ChoopsTocWriter(controller.cache.archiveCache);
+            const stream = writer.createStream();
 
-            writer.on('data', (chunk) => {
+            stream.on('data', (chunk) => {
                 outputBuffers.push(chunk);
             });
     
-            writer.on('end', () => {
+            stream.on('end', () => {
                 outputBuffer = Buffer.concat(outputBuffers);
                 resolve();
             });
@@ -75,5 +77,14 @@ describe('Choops TOC Writer tests', () => {
         expect(outputBuffer.readUInt32BE(0xD358)).to.equal(0xFFE888FD);
         expect(outputBuffer.readUInt32BE(0xD35C)).to.equal(0xD377D);
         expect(outputBuffer.readBigUInt64BE(0xD360)).to.equal(0x30n);
+    });
+
+    it('writes expected length per alignment', () => {
+        expect(outputBuffer.length).to.equal(0xD800);
+    });
+
+    it('can calculate the length of the TOC', () => {
+        const length = writer.calculateTOCLength();
+        expect(length).to.equal(0xD800);
     });
 });

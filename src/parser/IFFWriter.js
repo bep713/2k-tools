@@ -1,10 +1,34 @@
 const { Readable } = require('stream');
 
-class IFFWriter extends Readable {
+class IFFWriter {
+    constructor(file) {
+        this.file = file;
+
+        if (file) {
+            this.file.updateBlockDataAndOffsets();
+        }
+    };
+
+    get lengthInArchive() {
+        const totalBlockLength = this.file.blocks.reduce((accum, cur) => {
+            accum += cur.data.length;
+            return accum;
+        }, 0);
+
+        return this.file.headerSize + totalBlockLength + this.file.nameDataBuf.length;
+    };
+
+    createStream() {
+        return new IFFWriterReadable(this.file);
+    };
+};
+
+module.exports = IFFWriter;
+
+class IFFWriterReadable extends Readable {
     constructor(file) {
         super();
         this.file = file;
-        this.file.updateBlockDataAndOffsets();
 
         let headerBuffer = Buffer.alloc(file.headerSize);
 
@@ -61,7 +85,5 @@ class IFFWriter extends Readable {
         this.push(this.file.nameDataBuf);
 
         this.push(null);
-    };
+    }
 };
-
-module.exports = IFFWriter;

@@ -19,11 +19,24 @@ class IFF {
         this.dataFileOffsetBuf = null;
     };
 
+    get isChanged() {
+        const changedBlocks = this.blocks.filter((block) => {
+            return block.isChanged;
+        });
+
+        const changedDataFiles = this.files.filter((file) => {
+            return file.isChanged;
+        });
+
+        return changedBlocks.length > 0 || changedDataFiles.length > 0;
+    };
+
     updateBlockDataAndOffsets() {
         let blockOffset = this.headerSize;
         
         this.blocks.forEach((block, blockIndex) => {
             let blockLength = 0;
+            let priorBlockChangedStatus = block.isChanged;
 
             block.startOffset = blockOffset;
 
@@ -55,6 +68,7 @@ class IFF {
                 block.uncompressedLength = blockLength;
             }
 
+            block.isChanged = priorBlockChangedStatus;
             blockOffset += blockLength;
         });
 

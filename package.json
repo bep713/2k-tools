@@ -13,13 +13,13 @@
     "long": "^5.2.0",
     "make-dir": "^3.1.0",
     "multistream": "^4.1.0",
+    "rewiremock": "^3.14.3",
     "stream-parser": "^0.3.1",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
     "chai": "^4.3.6",
     "mocha": "^9.2.2",
-    "rewire": "^6.0.0",
     "sinon": "^13.0.1"
   }
 }

@@ -154,6 +154,8 @@ class IFFReader extends FileParser {
             block.data = decompressedBuf;
         }
 
+        block.isChanged = false;
+
         this.emit('block-data', block);
 
         if (block.index + 1 < this.file.blockCount) {
@@ -216,6 +218,7 @@ class IFFReader extends FileParser {
     _emitFiles() {
         this.file.files.forEach(file => {
             file.dataBlocks.forEach((dataBlock, index) => {
+                dataBlock.isChanged = false;
                 dataBlock.data = this.file.blocks[index].data.slice(dataBlock.offset, dataBlock.offset + dataBlock.length);
             });
 

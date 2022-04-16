@@ -1,25 +1,50 @@
 const { Readable } = require('stream');
 
-class ChoopsTocWriter extends Readable {
+class ChoopsTocWriter {
     constructor(archive) {
-        super();
+        this.archive = archive;
+    };
 
+    createStream() {
+        return new ChoopsTocWriterReadable(this.archive, this.calculateTOCLength());
+    };
+
+    calculateTOCLength() {
+        const actualTocLength = 0x18 + (this.archive.numberOfArchives * 0x10) + (this.archive.numberOfFiles * 0x10);
+
+        if (actualTocLength % this.archive.alignment === 0) {
+            return actualTocLength;
+        }
+        else {
+            return (Math.floor(actualTocLength / this.archive.alignment) + 1) * this.archive.alignment;
+        }
+    };
+};
+
+module.exports = ChoopsTocWriter;
+
+class ChoopsTocWriterReadable extends Readable {
+    constructor(archive, size) {
+        super();
         this.archive = archive;
 
+        let runningLength = 0;
+
         let fileHeaderBuffer = Buffer.alloc(0x18);
-        fileHeaderBuffer.writeUInt32BE(archive.magic, 0x0);
-        fileHeaderBuffer.writeUInt32BE(archive.alignment, 0x4);
-        fileHeaderBuffer.writeUInt32BE(archive.numberOfArchives, 0x8);
-        fileHeaderBuffer.writeUInt32BE(archive.zero, 0xC);
-        fileHeaderBuffer.writeUInt32BE(archive.numberOfFiles, 0x10);
-        fileHeaderBuffer.writeUInt32BE(archive.zero2, 0x14);
+        fileHeaderBuffer.writeUInt32BE(this.archive.magic, 0x0);
+        fileHeaderBuffer.writeUInt32BE(this.archive.alignment, 0x4);
+        fileHeaderBuffer.writeUInt32BE(this.archive.numberOfArchives, 0x8);
+        fileHeaderBuffer.writeUInt32BE(this.archive.zero, 0xC);
+        fileHeaderBuffer.writeUInt32BE(this.archive.numberOfFiles, 0x10);
+        fileHeaderBuffer.writeUInt32BE(this.archive.zero2, 0x14);
 
         this.push(fileHeaderBuffer);
+        runningLength += fileHeaderBuffer.length;
 
-        let archiveBuffer = Buffer.alloc(archive.numberOfArchives * 0x10);
+        let archiveBuffer = Buffer.alloc(this.archive.numberOfArchives * 0x10);
         let currentOffset = 0;
 
-        archive.archives.forEach((theArchive) => {
+        this.archive.archives.forEach((theArchive) => {
             archiveBuffer.writeUInt32BE(theArchive.sizeRaw, currentOffset);
             archiveBuffer.writeUInt32BE(theArchive.zero, currentOffset + 4);
             archiveBuffer.write(theArchive.name, currentOffset + 8);
@@ -28,17 +53,18 @@ class ChoopsTocWriter extends Readable {
         });
 
         this.push(archiveBuffer);
+        runningLength += archiveBuffer.length;
 
-        let tocBuffer = Buffer.alloc(archive.numberOfFiles * 0x10);
+        let tocBuffer = Buffer.alloc(size - runningLength);
         currentOffset = 0;
 
         // Re-sort the TOC in game archive index
-        archive.toc.sort((a, b) => {
+        this.archive.toc.sort((a, b) => {
             return a.id - b.id;
         });
 
         // Write the TOC data
-        archive.toc.forEach((tocEntry) => {
+        this.archive.toc.forEach((tocEntry) => {
             tocBuffer.writeUInt32BE(tocEntry.nameHash, currentOffset);
             tocBuffer.writeUInt32BE(tocEntry.rawOffset, currentOffset + 4);
             tocBuffer.writeBigUInt64BE(BigInt(tocEntry.size), currentOffset + 8);
@@ -50,5 +76,3 @@ class ChoopsTocWriter extends Readable {
         this.push(null);
     };
 };
-
-module.exports = ChoopsTocWriter;
