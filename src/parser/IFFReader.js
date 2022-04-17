@@ -145,10 +145,6 @@ class IFFReader extends FileParser {
     _onBlockData(buf, block) {
         block.data = buf;
 
-        if (!block.isCompressed) {
-            console.log('not compressed');
-        }
-
         if (block.isCompressed && this.decompressBlocks) {
             const decompressedBuf = this._decompressBlockData(buf, block);
             block.data = decompressedBuf;

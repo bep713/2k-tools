@@ -5,6 +5,7 @@ const { EventEmitter } = require('events');
 const { pipeline, Readable } = require('stream');
 
 const cacheUtil = require('../util/cacheUtil');
+const hashUtil = require('../util/2kHashUtil');
 const gameFileUtil = require('../util/choops/choopsGameFileUtil');
 
 const IFFReader = require('../parser/IFFReader');
@@ -63,6 +64,8 @@ class ChoopsController extends EventEmitter {
     };
 
     async _read() {
+        await hashUtil.hashLookupPromise;
+
         let cachePromises = [];
 
         this.parser.on('progress', function (data) {
@@ -181,6 +184,7 @@ class ChoopsController extends EventEmitter {
 
     async getFileController(name) {
         let entry = this.getEntryByName(name);
+        console.log(entry);
         const resourceRawData = await this.getFileRawData(name);
 
         if (resourceRawData.readUInt32BE(0) === 0xFF3BEF94) {

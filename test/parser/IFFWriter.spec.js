@@ -27,7 +27,7 @@ describe('IFF Writer tests', () => {
                 );
             });
 
-            writer = new IFFWriter(file);
+            writer = new IFFWriter(file, 0x800);
             const stream = writer.createStream();
             
             stream.on('data', (chunk) => {
@@ -83,10 +83,14 @@ describe('IFF Writer tests', () => {
     });
 
     it('expected file size', () => {
-        expect(outputBuffer.length).to.equal(0x5A0E);
+        expect(outputBuffer.length).to.equal(0x6000);
     });
 
     it('expected length in archive', () => {
-        expect(writer.lengthInArchive).to.equal(0x5A0E);
+        expect(writer.lengthInArchive).to.eql({
+            mainDataLength: 0x59AA,
+            allDataLength: 0x5A0E,
+            totalLength: 0x6000
+        });
     });
 });

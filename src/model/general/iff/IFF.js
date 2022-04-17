@@ -15,6 +15,7 @@ class IFF {
         this.blocks = [];
         this.fileNameDefintions = [];
         
+        this._isChanged = false;
         this.nameDataBuf = null;
         this.dataFileOffsetBuf = null;
     };
@@ -28,7 +29,11 @@ class IFF {
             return file.isChanged;
         });
 
-        return changedBlocks.length > 0 || changedDataFiles.length > 0;
+        return this._isChanged || changedBlocks.length > 0 || changedDataFiles.length > 0;
+    };
+
+    set isChanged(isChanged) {
+        this._isChanged = isChanged;
     };
 
     updateBlockDataAndOffsets() {

@@ -1,8 +1,9 @@
 const { Readable } = require('stream');
 
 class IFFWriter {
-    constructor(file) {
+    constructor(file, alignment) {
         this.file = file;
+        this.alignment = alignment;
 
         if (file) {
             this.file.updateBlockDataAndOffsets();
@@ -15,20 +16,33 @@ class IFFWriter {
             return accum;
         }, 0);
 
-        return this.file.headerSize + totalBlockLength + this.file.nameDataBuf.length;
+        const allDataLength = this.file.headerSize + totalBlockLength + this.file.nameDataBuf.length;
+        let totalLength = allDataLength;
+
+        if (this.alignment && totalLength % this.alignment !== 0) {
+            totalLength = (Math.floor(totalLength / this.alignment) + 1) * this.alignment;
+        }
+
+        return {
+            mainDataLength: this.file.headerSize + totalBlockLength,
+            allDataLength: allDataLength,
+            totalLength: totalLength
+        };
     };
 
     createStream() {
-        return new IFFWriterReadable(this.file);
+        return new IFFWriterReadable(this.file, this.lengthInArchive.totalLength);
     };
 };
 
 module.exports = IFFWriter;
 
 class IFFWriterReadable extends Readable {
-    constructor(file) {
+    constructor(file, size) {
         super();
         this.file = file;
+        this.size = size;
+        let runningLength = 0;
 
         let headerBuffer = Buffer.alloc(file.headerSize);
 
@@ -77,12 +91,18 @@ class IFFWriterReadable extends Readable {
         });
 
         this.push(headerBuffer);
+        runningLength += headerBuffer.length;
 
         this.file.blocks.forEach((block) => {
             this.push(block.data);
+            runningLength += block.data.length;
         });
 
         this.push(this.file.nameDataBuf);
+        runningLength += this.file.nameDataBuf.length;
+
+        const remainingDataLength = this.size - runningLength;
+        this.push(Buffer.alloc(remainingDataLength));
 
         this.push(null);
     }
