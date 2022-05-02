@@ -43,11 +43,13 @@ class ChoopsTextureWriter {
             const tempGtfFileName = path.join(envPath.temp, `${fileNameFormatted}.gtf`);
 
             const pathToGtfExe = process.pkg ? 'dds2gtf.exe' : path.join(__dirname, '../../../lib/dds2gtf.exe');
-            exec(`${pathToGtfExe} -o ${tempGtfFileName} ${tempDdsFileName}`, async (err, out, stderr) => {
+            exec(`${pathToGtfExe} -v -z -o "${tempGtfFileName}" "${tempDdsFileName}"`, async (err, out, stderr) => {
                 if (err) {
                     console.log(err);
                     reject(err);
                 }
+
+                // console.log(out);
 
                 const gtfData = await fs.readFile(tempGtfFileName);
 

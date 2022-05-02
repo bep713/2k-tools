@@ -25,6 +25,7 @@ class ChoopsController extends EventEmitter {
         this.parser = new ChoopsReader();
         this.gameDirectoryPath = gameDirectoryPath;
         this.progressTracker = new ProgressTracker();
+        this._archiveWriter = new ChoopsArchiveWriter(this);
     };
 
     async read(options) {
@@ -32,9 +33,7 @@ class ChoopsController extends EventEmitter {
 
         if (options && options.buildCache) {
             this._emitProgress(this.progressTracker.format('buildCache option passed in. Reading and building cache...'));
-
-            await this._read();
-            await this._buildCache();
+            await this.rebuildCache();
         }
         else {
             try {
@@ -45,19 +44,46 @@ class ChoopsController extends EventEmitter {
                     let archive = new Archive();
                     archive.name = entry.name;
                     archive.zero = entry.zero;
+                    archive.zero = entry.zero;
                     archive.sizeRaw = entry.sizeRaw;
 
                     return archive;
+                });
+
+                this.cache.tocCache = this.cache.tocCache.map((rawCacheEntry) => {
+                    let cacheEntry = new ChoopsCacheEntry();
+                    cacheEntry.id = rawCacheEntry.id;
+                    cacheEntry.size = rawCacheEntry.size;
+                    cacheEntry.nameHash = rawCacheEntry.nameHash;
+                    cacheEntry.name = rawCacheEntry.name;
+                    cacheEntry.rawOffset = rawCacheEntry.rawOffset;
+                    cacheEntry.offset = rawCacheEntry.offset;
+                    cacheEntry.location = rawCacheEntry.location;
+                    cacheEntry.isSplit = rawCacheEntry.isSplit;
+                    cacheEntry.splitSecondFileSize = rawCacheEntry.splitSecondFileSize;
+                    
+                    cacheEntry.original.id = rawCacheEntry.original.id;
+                    cacheEntry.original.size = rawCacheEntry.original.size;
+                    cacheEntry.original.nameHash = rawCacheEntry.original.nameHash;
+                    cacheEntry.original.name = rawCacheEntry.original.name;
+                    cacheEntry.original.rawOffset = rawCacheEntry.original.rawOffset;
+                    cacheEntry.original.offset = rawCacheEntry.original.offset;
+                    cacheEntry.original.location = rawCacheEntry.original.location;
+                    cacheEntry.original.isSplit = rawCacheEntry.original.isSplit;
+                    cacheEntry.original.splitSecondFileSize = rawCacheEntry.original.splitSecondFileSize;
+
+                    return cacheEntry;
                 });
 
                 this.data = this.cache.tocCache;
             }
             catch (err) {
                 this._emitProgress(this.progressTracker.format('Cache not found or empty, reading and building cache...'));
-                await this._read();
-                await this._buildCache();
+                await this.rebuildCache();
             }
         }
+
+        this._archiveWriter.cache = this.cache;
 
         this.progressTracker.step();
         this._emitProgress(this.progressTracker.format('Read complete.'));
@@ -78,7 +104,15 @@ class ChoopsController extends EventEmitter {
                 cacheEntry.id = data.meta.id;
                 cacheEntry.size = data.meta.size;
                 cacheEntry.nameHash = data.meta.nameHash;
-                cacheEntry.name = data.meta.name;
+
+                const name = await hashUtil.hashLookup(cacheEntry.nameHash);
+                if (!name) {
+                    cacheEntry.name = data.meta.id.toString();
+                }
+                else {
+                    cacheEntry.name = name.str;
+                }
+
                 cacheEntry.rawOffset = data.meta.rawOffset;
                 cacheEntry.offset = data.meta.archiveOffset;
                 cacheEntry.location = data.meta.archiveIndex;
@@ -115,7 +149,23 @@ class ChoopsController extends EventEmitter {
         this.cache.tocCache = this.data;
         this.cache.archiveCache = this.parser.archive;
 
-        await cacheUtil.buildAndSaveCache(cacheUtil.CACHES.CHOOPS.cache, this.cache);
+        await this._saveCache();
+    };
+
+    async rebuildCache() {
+        await this._read();
+        await this._buildCache();
+    };
+
+    async _saveCache() {
+        // build cache to save - we don't want to save any of the controllers
+        let cacheToSave = JSON.parse(JSON.stringify(this.cache));
+
+        cacheToSave.tocCache.forEach((cacheEntry) => {
+            delete cacheEntry.controller;
+        });
+
+        await cacheUtil.buildAndSaveCache(cacheUtil.CACHES.CHOOPS.cache, cacheToSave);
     };
 
     getEntryByName(name) {
@@ -184,7 +234,6 @@ class ChoopsController extends EventEmitter {
 
     async getFileController(name) {
         let entry = this.getEntryByName(name);
-        console.log(entry);
         const resourceRawData = await this.getFileRawData(name);
 
         if (resourceRawData.readUInt32BE(0) === 0xFF3BEF94) {
@@ -218,9 +267,37 @@ class ChoopsController extends EventEmitter {
     };
 
     async repack() {
-        const archiveWriter = new ChoopsArchiveWriter(this.gameDirectoryPath, this.cache);
-        await archiveWriter.write();
-        await cacheUtil.buildAndSaveCache(cacheUtil.CACHES.CHOOPS.cache, this.cache);
+        await this._archiveWriter.write();
+        await this._saveCache();
+    };
+
+    async revert(name) {
+        let entry = this.getEntryByName(name);
+        entry.revert();
+
+        // need logic to bump the location by 1 if the files are still modified
+        // if (this.cache.archiveCache.archives.length > 5) {
+        //     entry.location += 1;
+        //     entry.offset 
+        // }
+
+        let archiveCacheEntry = this.cache.archiveCache.toc.find((tocEntry) => {
+            return tocEntry.id === entry.id;
+        });
+
+        archiveCacheEntry.archiveIndex = entry.location;
+        archiveCacheEntry.archiveOffset = entry.offset;
+        archiveCacheEntry.rawOffset = entry.rawOffset;
+        archiveCacheEntry.size = entry.size;
+        archiveCacheEntry.isSplit = entry.isSplit;
+        archiveCacheEntry.splitSecondFileSize = entry.splitSecondFileSize;
+
+        delete entry.controller; 
+    };
+
+    async revertAll() {
+        await this._archiveWriter.revertAll();
+        await this.rebuildCache();
     };
 
     _emitProgress(message) {

@@ -4,7 +4,7 @@ const fs = require('fs/promises');
 const hashUtil = require('../src/util/2kHashUtil');
 
 
-const STRING_TO_HASH = "Big Ten";
+const STRING_TO_HASH = "uh080.iff";
 
 (async () => {
     const hash = await hashUtil.hash(STRING_TO_HASH, 0xFFFFFFFF);

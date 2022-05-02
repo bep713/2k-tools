@@ -11,9 +11,10 @@ const ChoopsTocWriter = require('../../parser/choops/ChoopsTocWriter');
 const gameFileUtil = require('../../util/choops/choopsGameFileUtil');
 
 class ChoopsArchiveWriter {
-    constructor(gameDirectoryPath, cache) {
-        this.cache = cache;
-        this.gameDirectoryPath = gameDirectoryPath;
+    constructor(controller) {
+        this.controller = controller;
+        this.cache = controller.cache;
+        this.gameDirectoryPath = controller.gameDirectoryPath;
     };
 
     async write() {
@@ -80,13 +81,20 @@ class ChoopsArchiveWriter {
 
             this.cache.tocCache.forEach((entry) => {
                 entry.location += 1;
-                // entry.offset += tocLength;
-                entry.rawOffset = entry.offset / this.cache.archiveCache.alignment;
+                
+                const previousOffset = entry.rawOffset * this.cache.archiveCache.alignment;
+                entry.rawOffset = (previousOffset + tocLength) / this.cache.archiveCache.alignment;
+
+                entry.original.location = entry.location;
+                entry.original.rawOffset = entry.rawOffset;
             });
         }
 
         // get changed entries
         const changedEntries = this.cache.tocCache.filter((entry) => {
+            if (entry.original.offset !== entry.offset && entry.original.location !== entry.location) {
+                return true;
+            }
             if (entry.controller !== undefined && entry.controller !== null) {
                 return entry.controller.file.isChanged;
             }
@@ -94,6 +102,17 @@ class ChoopsArchiveWriter {
                 return false;
             }
         });
+
+        // if the entry has changed in the past but not now, read it so we have the file
+        // and we can get the IFFWriter
+        let addedControllers = [];
+
+        await Promise.all(changedEntries.map(async (entry) => {
+            if (!entry.controller) {
+                await this.controller.getFileController(entry.name);
+                addedControllers.push(entry.name);
+            }
+        }));
 
         // make a list of IFFWriters for each changed file, to use later
         const iffWriters = changedEntries.map((entry) => {
@@ -108,16 +127,20 @@ class ChoopsArchiveWriter {
         //     return accum;
         // }, 0);
 
-        let runningTotalOffset = this.cache.archiveCache.archives.reduce((accum, cur) => {
+        let runningTotalOffset = this.cache.archiveCache.archives.filter((entry) => {
+            return entry.name.indexOf('G') < 0;
+        }).reduce((accum, cur) => {
             accum += cur.size;
             return accum;
         }, 0);
 
-        const modFileArchive = this.cache.archiveCache.archives.find((archive) => {
+        let modFileArchive = this.cache.archiveCache.archives.find((archive) => {
             return archive.name === '\u00000\u0000G\u0000\u0000\u0000\u0000';
         });
-
-        let runningModArchiveOffset = modFileArchive.size;
+        
+        // let runningModArchiveOffset = modFileArchive.size;
+        modFileArchive.size = 0;
+        let runningModArchiveOffset = 0;
 
         // modify cache entry offset and size
         iffWriters.forEach((entry) => {
@@ -128,6 +151,8 @@ class ChoopsArchiveWriter {
             entry.entry.offset = runningModArchiveOffset;
             entry.entry.rawOffset = runningTotalOffset / this.cache.archiveCache.alignment;
             entry.entry.size = newEntryLength.allDataLength;
+            entry.entry.isSplit = false;
+            entry.entry.splitSecondFileSize = 0;
 
             // modify archive cache
             let archiveCacheEntry = this.cache.archiveCache.toc.find((tocEntry) => {
@@ -139,9 +164,14 @@ class ChoopsArchiveWriter {
             archiveCacheEntry.size = entry.entry.size;
             archiveCacheEntry.offset = runningTotalOffset;
             archiveCacheEntry.rawOffset = entry.entry.rawOffset;
+            archiveCacheEntry.isSplit = false;
+            archiveCacheEntry.splitSecondFileSize = 0;
 
             runningTotalOffset += newEntryLength.totalLength;
             runningModArchiveOffset += newEntryLength.totalLength;
+
+            // update 0G cache entry
+            modFileArchive.size += newEntryLength.totalLength;
         });
 
 
@@ -154,7 +184,7 @@ class ChoopsArchiveWriter {
             pipeline(
                 streams,
                 fs.createWriteStream(path.join(this.gameDirectoryPath, '0G'), {
-                    flags: 'a+'
+                    flags: 'w+'
                 }),
                 (err) => {
                     if (err) reject(err);
@@ -162,9 +192,6 @@ class ChoopsArchiveWriter {
                 }
             )
         });
-
-        // update 0G cache entry
-        modFileArchive.size += runningModArchiveOffset;
 
         // write TOC to 0A
         await new Promise((resolve, reject) => {
@@ -177,6 +204,30 @@ class ChoopsArchiveWriter {
                 }
             )
         });
+
+        // clean up added controllers
+        addedControllers.forEach((controllerName) => {
+            let cacheEntry = this.cache.tocCache.find((entry) => {
+                return entry.name === controllerName;
+            });
+
+            delete cacheEntry.controller;
+        });
+    };
+
+    async revertAll() {
+        const firstArchiveStat = await fsPromises.stat(path.join(this.gameDirectoryPath, '0A'));
+        
+        if (firstArchiveStat.size <= 0x10000) {
+            await fsPromises.rm(path.join(this.gameDirectoryPath, '0A'));
+            await fsPromises.rm(path.join(this.gameDirectoryPath, '0G'));
+
+            await fsPromises.rename(path.join(this.gameDirectoryPath, '0B'), path.join(this.gameDirectoryPath, '0A'));
+            await fsPromises.rename(path.join(this.gameDirectoryPath, '0C'), path.join(this.gameDirectoryPath, '0B'));
+            await fsPromises.rename(path.join(this.gameDirectoryPath, '0D'), path.join(this.gameDirectoryPath, '0C'));
+            await fsPromises.rename(path.join(this.gameDirectoryPath, '0E'), path.join(this.gameDirectoryPath, '0D'));
+            await fsPromises.rename(path.join(this.gameDirectoryPath, '0F'), path.join(this.gameDirectoryPath, '0E'));
+        }
     };
 };
 

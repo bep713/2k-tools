@@ -10,6 +10,7 @@ const OUTPUT_PATH = path.join('./src/data/hash-lookup.json');
     let mapping = [];
 
     let stringData = await fs.readFile(PATH_TO_STRINGS, 'utf-8');
+    stringData += `\r\n`;
 
     for (let i = 0; i < 1000; i++) {
         stringData += `${i.toString().padStart(3, '0')}.iff\r\n`;

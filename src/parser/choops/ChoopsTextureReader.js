@@ -48,10 +48,12 @@ class ChoopsTextureReader {
                 await fs.writeFile(tempGtfFileName, gtfBuffer);
     
                 const pathToGtfExe = process.pkg ? 'gtf2dds.exe' : path.join(__dirname, '../../../lib/gtf2dds.exe');
-                exec(`${pathToGtfExe} -o ${tempDdsFileName} ${tempGtfFileName}`, async (err, out, stderr) => {
+                exec(`${pathToGtfExe} -v -z -o "${tempDdsFileName}" ${tempGtfFileName}`, async (err, out, stderr) => {
                     if (err) {
                         reject(err);
                     }
+
+                    // console.log(out);
     
                     const ddsData = await fs.readFile(tempDdsFileName);
     

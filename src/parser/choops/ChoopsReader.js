@@ -1,7 +1,5 @@
 const { Readable } = require('stream');
 
-const hashUtil = require('../../util/2kHashUtil');
-
 const FileParser = require('../FileParser');
 const Archive = require('../../model/choops/archive/Archive');
 const GameArchive = require('../../model/choops/archive/GameArchive');
@@ -67,16 +65,6 @@ class ChoopsReader extends FileParser {
             tocEntry.offset = tocEntry.rawOffset * this.archive.alignment;
             tocEntry.zero = buf.readUInt32BE(currentOffset + 8);
             tocEntry.size = buf.readUInt32BE(currentOffset + 12);
-
-            hashUtil.hashLookup(tocEntry.nameHash)
-                .then((name) => {
-                    if (name) {
-                        tocEntry.name = name.str;
-                    }
-                    else {
-                        tocEntry.name = tocEntry.id.toString();
-                    }
-                });
 
             const archiveDetails = this._getArchiveDetailsFromOffset(tocEntry.offset, tocEntry.size);
             tocEntry.archiveIndex = archiveDetails.index;
