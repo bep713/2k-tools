@@ -13,11 +13,13 @@ class ChoopsTextureWriter {
     async toFileFromGtf(gtfData, file) {
         if (file.dataBlocks.length < 2) throw new Error('File does not have expected number of data blocks.');
 
+        const oldRemap = file.dataBlocks[0].data.readUInt16BE(0x9);
+
         file.dataBlocks[0].data.writeUInt32BE(0x0, 0x4C);
         file.dataBlocks[0].data.writeUInt32BE(0x0, 0x50);
         file.dataBlocks[0].data.writeUInt32BE(0x0, 0x54);
         file.dataBlocks[0].data.writeUInt32BE(gtfData.readUInt32BE(0x18), 0x58);
-        file.dataBlocks[0].data.writeUInt32BE(gtfData.readUInt32BE(0x1C), 0x5C);
+        file.dataBlocks[0].data.writeUInt32BE(oldRemap, 0x5C);
         file.dataBlocks[0].data.writeUInt32BE(gtfData.readUInt32BE(0x20), 0x60);
         file.dataBlocks[0].data.writeUInt32BE(gtfData.readUInt32BE(0x24), 0x64);
         file.dataBlocks[0].data.writeUInt32BE(gtfData.readUInt32BE(0x28), 0x68);

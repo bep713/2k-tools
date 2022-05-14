@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const HASH_TO_LOOKUP = 0xA25218B2;
+const HASH_TO_LOOKUP = 0x5C369069;
 const PATH_TO_LOOKUP = path.join(__dirname, '../src/data/hash-lookup.json');
 
 const lookup = JSON.parse(fs.readFileSync(PATH_TO_LOOKUP));
