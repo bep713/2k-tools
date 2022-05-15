@@ -183,7 +183,7 @@ class IFFReader extends FileParser {
             this.bytes(size, this._onFileNameDefinitions);
         }
         else {
-            this.skipBytes(Infinity);
+            this._setDefaultFileNames();
         }
     };
 
@@ -207,6 +207,14 @@ class IFFReader extends FileParser {
 
             currentOffset += 4;
         }
+
+        this._emitFiles();
+    };
+
+    _setDefaultFileNames() {
+        this.file.files.forEach((file, index) => {
+            file.name = index;
+        });
 
         this._emitFiles();
     };
