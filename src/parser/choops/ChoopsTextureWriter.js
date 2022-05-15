@@ -36,11 +36,64 @@ class ChoopsTextureWriter {
     };
 
     async toFileFromDDSPath(ddsPath, file) {
+        const tempGtfFileName = await this.toGtfFromDDS(ddsPath, file.name)
+        const gtfData = await fs.readFile(tempGtfFileName);
+
+        try {
+            fs.rm(tempGtfFileName);
+        }
+        catch (err) {
+            console.error(err);
+        }
+
+        return this.toFileFromGtf(gtfData, file);
+    };
+
+    async toPackageFileFromGtf(gtfData, packageFile) {
+        if (!packageFile.header || !packageFile.data) throw new Error('Package file is missing header and/or data.');
+
+        const oldRemap = packageFile.header.readUInt16BE(0x9);
+
+        packageFile.header.writeUInt32BE(0x0, 0x4C);
+        packageFile.header.writeUInt32BE(0x0, 0x50);
+        packageFile.header.writeUInt32BE(0x0, 0x54);
+        packageFile.header.writeUInt32BE(gtfData.readUInt32BE(0x18), 0x58);
+        packageFile.header.writeUInt32BE(oldRemap, 0x5C);
+        packageFile.header.writeUInt32BE(gtfData.readUInt32BE(0x20), 0x60);
+        packageFile.header.writeUInt32BE(gtfData.readUInt32BE(0x24), 0x64);
+        packageFile.header.writeUInt32BE(gtfData.readUInt32BE(0x28), 0x68);
+        packageFile.header.writeUInt32BE(gtfData.readUInt32BE(0x2C), 0x6C);
+        // file.dataBlocks[0].isChanged = true;
+
+        const offsetToTexture = gtfData.readUInt32BE(0x10);
+
+        // file.dataBlocks[1].length = gtfData.length - offsetToTexture;
+        packageFile.data = gtfData.slice(offsetToTexture);
+        // file.dataBlocks[1].isChanged = true;
+        
+        // file.isChanged = true;
+    };
+
+    async toPackageFileFromDDSPath(ddsPath, packageFile) {
+        const tempGtfFileName = await this.toGtfFromDDS(ddsPath, packageFile.name)
+        const gtfData = await fs.readFile(tempGtfFileName);
+
+        try {
+            fs.rm(tempGtfFileName);
+        }
+        catch (err) {
+            console.error(err);
+        }
+
+        return this.toPackageFileFromGtf(gtfData, packageFile);
+    };
+
+    async toGtfFromDDS(ddsPath, name) {
         return new Promise(async (resolve, reject) => {
             const guid = uuid();
             const envPath = await envPathUtil.getEnvPath();
 
-            const fileNameFormatted = `${guid}_${file.name}`;
+            const fileNameFormatted = `${guid}_${name}`;
             const tempDdsFileName = ddsPath;
             const tempGtfFileName = path.join(envPath.temp, `${fileNameFormatted}.gtf`);
 
@@ -50,19 +103,9 @@ class ChoopsTextureWriter {
                     console.log(err);
                     reject(err);
                 }
-
-                // console.log(out);
-
-                const gtfData = await fs.readFile(tempGtfFileName);
-
-                try {
-                    fs.rm(tempGtfFileName);
+                else {
+                    resolve(tempGtfFileName);
                 }
-                catch (err) {
-                    
-                }
-
-                resolve(this.toFileFromGtf(gtfData, file));
             });
         });
     };

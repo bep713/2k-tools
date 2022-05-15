@@ -1,8 +1,9 @@
-const { Readable, pipeline } = require('stream');
+const { Readable, pipeline, Writable } = require('stream');
 
 const IFF = require('../model/general/iff/IFF');
 const IFFType = require('../model/general/iff/IFFType');
 const PackageReader = require('../parser/PackageReader');
+const PackageWriter = require('../parser/PackageWriter');
 
 class IFFController {
     constructor(iffFile) {
@@ -12,6 +13,8 @@ class IFFController {
         else {
             this.file = new IFF();
         }
+
+        this.fileControllerMap = {};
     };
 
     async getFileRawData(name, type) {
@@ -38,6 +41,7 @@ class IFFController {
     };
 
     async getFileController(name, type) {
+        // returns either a SCNE controller (for SCNE files only) or raw buffer data
         let file = await this.getFileRawData(name, type);
 
         switch(file.type) {
@@ -47,9 +51,6 @@ class IFFController {
                 }));
 
                 const resourceDataStream = Readable.from(fileDataBlocks);
-    
-                // this.progressTracker.totalSteps += 1;
-                // this._emitProgress(this.progressTracker.format('Parsing SCNE...'));
         
                 file = await new Promise((resolve, reject) => {
                     const parser = new PackageReader({
@@ -66,10 +67,8 @@ class IFFController {
                         }
                     )
                 });
-                
-                // this.progressTracker.step();
-                // this._emitProgress(this.progressTracker.format('Done parsing SCNE.'));
-                // return controller;
+
+                this.fileControllerMap[`${name}_2`] = file;
         }
 
         return file;
@@ -79,6 +78,58 @@ class IFFController {
         return this.file.files.filter((file) => {
             return file.type === type;
         });
+    };
+
+    async repack() {
+        await Promise.all(Object.keys(this.fileControllerMap).map(async (key) => {
+            return new Promise(async (resolve, reject) => {
+                const controller = this.fileControllerMap[key];
+    
+                const iffNameData = key.split('_');    // [0] = name, [1] = type
+                const iffSubFile = await this.getFileRawData(iffNameData[0], parseInt(iffNameData[1]));
+                
+                if (iffSubFile) {
+                    if (iffSubFile.type === IFFType.TYPES.SCNE) {
+                        if (iffSubFile.dataBlocks.length !== 2) {
+                            throw new Error(`Error: Subfiles with more or less than 2 data blocks are not currently supported.`);
+                        }
+    
+                        const writer = new PackageWriter(controller.file);
+                        let outputBuffers = [], newScneBuffer = null;
+    
+                        await new Promise((resolve, reject) => {
+                            pipeline(
+                                writer.createStream(),
+                                new Writable({
+                                    write(chunk, enc, cb) {
+                                        outputBuffers.push(chunk);
+                                        cb();
+                                    }
+                                }),
+                                (err) => {
+                                    if (err) {
+                                        reject(err);
+                                    }
+    
+                                    newScneBuffer = Buffer.concat(outputBuffers);
+                                    resolve(newScneBuffer);
+                                }
+                            )
+                        });
+    
+                        const firstBlock = newScneBuffer.slice(0, controller.file.offsets.headerBlockSize);
+                        iffSubFile.dataBlocks[0].length = firstBlock.length;
+                        iffSubFile.dataBlocks[0].data = firstBlock;
+    
+                        const secondBlock = newScneBuffer.slice(controller.file.offsets.headerBlockSize);
+                        iffSubFile.dataBlocks[1].length = secondBlock.length;
+                        iffSubFile.dataBlocks[1].data = secondBlock;
+                    }
+                }
+
+                resolve();
+            });
+        }));
     };
 };
 

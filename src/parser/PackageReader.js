@@ -45,19 +45,22 @@ class PackageReader extends FileParser {
         this.file.unk16 = buf.readUInt32BE(0x50);
 
         if (this.file.numberOfTextures > 0) {
-            this.skipBytes(this.file.textureOffset - this.currentBufferIndex, () => {
-                this.bytes(0xB0, this._onTextureHeader);
-            });
+            this.bytes(this.file.textureOffset - this.currentBufferIndex, this._onHeaderTrailer);
         }
         else {
             this.skipBytes(Infinity);
         }
     };
 
+    _onHeaderTrailer(buf) {
+        this.file.bufs.headerTrailer = buf;
+        this.bytes(0xB0, this._onTextureHeader);
+    };
+
     _onTextureHeader(buf) {
         let texture = new PackageTexture();
         texture.index = this.file.textures.length;
-        texture.name = texture.index;
+        texture.name = `texture_${texture.index}`;
         texture.header = buf;
         texture.relativeDataOffset = buf.readUInt32BE(0xA4);
 
@@ -71,17 +74,20 @@ class PackageReader extends FileParser {
                 return a.relativeDataOffset - b.relativeDataOffset;
             });
 
-            const bytesToSkip = this.file.nameOffset - 1 - this.currentBufferIndex;
+            const postTextureHeaderBytes = this.file.nameOffset - 1 - this.currentBufferIndex;
 
-            if (bytesToSkip > 0) {
-                this.skipBytes(bytesToSkip, () => {
-                    this.bytes(0x2, this._onPackageName);
-                });
+            if (postTextureHeaderBytes > 0) {
+                this.bytes(postTextureHeaderBytes, this._onPostTextureHeaders);
             }
             else {
                 this.bytes(0x2, this._onPackageName);
             }
         }
+    };
+
+    _onPostTextureHeaders(buf) {
+        this.file.bufs.postTextureHeaders = buf;
+        this.bytes(0x2, this._onPackageName);
     };
 
     _onPackageName(buf) {
@@ -92,21 +98,24 @@ class PackageReader extends FileParser {
         }
         else {
             if (this.headerBlockSize > 0) {
-                const bytesToSkip = this.headerBlockSize - this.currentBufferIndex;
+                const postPackageNameBytes = this.headerBlockSize - this.currentBufferIndex;
     
-                if (bytesToSkip <= 0) {
+                if (postPackageNameBytes <= 0) {
                     return this._onTextureDataStart(0);
                 }
                 else {
-                    this.skipBytes(bytesToSkip, () => {
-                        return this._onTextureDataStart(0);
-                    });
+                    this.bytes(postPackageNameBytes, this._onPostPackageName);
                 }
             }
             else {
                 return this._onTextureDataStart(0);
             }
         }
+    };
+
+    _onPostPackageName(buf) {
+        this.file.bufs.postPackageName = buf;
+        this._onTextureDataStart(0);
     };
 
     _onTextureDataStart(index) {

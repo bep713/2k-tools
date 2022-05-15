@@ -14,7 +14,10 @@ describe('Package Reader tests', () => {
         emittedBlockData = [];
         emittedFileData = [];
 
-        reader = new PackageReader();
+        reader = new PackageReader({
+            headerBlockSize: 0x34000,
+            dataSize: 0x357500
+        });
 
         reader.on('block-data', (data) => {
             emittedBlockData.push(data);
@@ -76,5 +79,12 @@ describe('Package Reader tests', () => {
         expect(package.textures[15].header.readUInt32BE(0xA4)).to.equal(0x31F01)
         expect(package.textures[15].data.length).to.equal(0x5580);
         expect(package.textures[15].index).to.equal(15);
+    });
+
+    it('expected buffers', () => {
+        expect(package.bufs.headerTrailer.length).to.equal(0x3C);
+        expect(package.bufs.postTextureHeaders.length).to.equal(0x32494);
+        expect(package.bufs.postPackageName).to.be.null;
+        expect(package.bufs.postTextureData).to.be.null;
     });
 });

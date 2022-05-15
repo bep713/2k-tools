@@ -8,7 +8,13 @@ class PackageController {
         else {
             this.file = new Package();
         }
-    };    
+    };
+
+    getTextureByName(name) {
+        return this.file.textures.find((file) => {
+            return file.name === name;
+        });
+    };
 };
 
 module.exports = PackageController;

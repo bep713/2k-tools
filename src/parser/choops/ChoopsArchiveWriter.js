@@ -103,14 +103,18 @@ class ChoopsArchiveWriter {
             }
         });
 
-        // if the entry has changed in the past but not now, read it so we have the file
-        // and we can get the IFFWriter
         let addedControllers = [];
 
         await Promise.all(changedEntries.map(async (entry) => {
             if (!entry.controller) {
+                // if the entry has changed in the past but not now, read it so we have the file
+                // and we can get the IFFWriter
                 await this.controller.getFileController(entry.name);
                 addedControllers.push(entry.name);
+            }
+            else {
+                // otherwise, we need to repack the controller because it has changed
+                await entry.controller.repack();
             }
         }));
 
