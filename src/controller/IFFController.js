@@ -14,32 +14,48 @@ class IFFController {
         }
     };
 
-    async getFileRawData(name) {
+    async getFileRawData(name, type) {
         if (!name) { throw new Error('getResourceRawData() takes in a mandatory `name` parameter.'); }
         if (this.file.files.length === 0) { throw new Error('The IFF file does not contain any subfiles to read.'); }
 
-        const file = this.file.files.find((file) => {
+        const files = this.file.files.filter((file) => {
             return file.name.toLowerCase() === name.toLowerCase()
                 || file.name.toLowerCase() === name + '\0'.toLowerCase();
         });
 
+        let file;
+
+        if (type) {
+            file = files.find((file) => {
+                return file.type === type;
+            });
+        }
+        else {
+            file = files[0];
+        }
+
         return file;
     };
 
-    async getFileController(name) {
-        let file = await this.getFileRawData(name);
+    async getFileController(name, type) {
+        let file = await this.getFileRawData(name, type);
 
         switch(file.type) {
             case IFFType.TYPES.SCNE:
-                const resourceDataStream = Readable.from(Buffer.concat(file.dataBlocks.map((block) => {
+                const fileDataBlocks = Buffer.concat(file.dataBlocks.map((block) => {
                     return block.data;
-                })));
+                }));
+
+                const resourceDataStream = Readable.from(fileDataBlocks);
     
                 // this.progressTracker.totalSteps += 1;
                 // this._emitProgress(this.progressTracker.format('Parsing SCNE...'));
         
                 file = await new Promise((resolve, reject) => {
-                    const parser = new PackageReader();
+                    const parser = new PackageReader({
+                        headerBlockSize: file.dataBlocks[0].data.length,
+                        dataSize: fileDataBlocks.length
+                    });
         
                     pipeline(
                         resourceDataStream,

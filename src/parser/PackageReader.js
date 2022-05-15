@@ -3,11 +3,14 @@ const PackageController = require('../controller/PackageController');
 const PackageTexture = require('../model/general/iff/PackageTexture');
 
 class PackageReader extends FileParser {
-    constructor() {
+    constructor(options) {
         super();
 
         this.controller = new PackageController();
         this.file = this.controller.file;
+
+        this.headerBlockSize = options && options.headerBlockSize ? options.headerBlockSize : 0;
+        this.dataSize = options && options.dataSize ? options.dataSize : 0;
 
         this.bytes(0x54, this._onFileHeader);
     };
@@ -41,9 +44,14 @@ class PackageReader extends FileParser {
         this.file.unk15 = buf.readUInt32BE(0x4C);
         this.file.unk16 = buf.readUInt32BE(0x50);
 
-        this.skipBytes(this.file.textureOffset - this.currentBufferIndex, () => {
-            this.bytes(0xB0, this._onTextureHeader);
-        });
+        if (this.file.numberOfTextures > 0) {
+            this.skipBytes(this.file.textureOffset - this.currentBufferIndex, () => {
+                this.bytes(0xB0, this._onTextureHeader);
+            });
+        }
+        else {
+            this.skipBytes(Infinity);
+        }
     };
 
     _onTextureHeader(buf) {
@@ -63,9 +71,16 @@ class PackageReader extends FileParser {
                 return a.relativeDataOffset - b.relativeDataOffset;
             });
 
-            this.skipBytes(this.file.nameOffset - 1 - this.currentBufferIndex, () => {
+            const bytesToSkip = this.file.nameOffset - 1 - this.currentBufferIndex;
+
+            if (bytesToSkip > 0) {
+                this.skipBytes(bytesToSkip, () => {
+                    this.bytes(0x2, this._onPackageName);
+                });
+            }
+            else {
                 this.bytes(0x2, this._onPackageName);
-            });
+            }
         }
     };
 
@@ -76,16 +91,20 @@ class PackageReader extends FileParser {
             this.bytes(0x2, this._onPackageName);
         }
         else {
-            const alignment = 0x20;
-            const bytesToSkip = Math.ceil(this.currentBufferIndex / alignment) * alignment - this.currentBufferIndex;
-
-            if (bytesToSkip <= 0) {
-                return this._onTextureDataStart(0);
+            if (this.headerBlockSize > 0) {
+                const bytesToSkip = this.headerBlockSize - this.currentBufferIndex;
+    
+                if (bytesToSkip <= 0) {
+                    return this._onTextureDataStart(0);
+                }
+                else {
+                    this.skipBytes(bytesToSkip, () => {
+                        return this._onTextureDataStart(0);
+                    });
+                }
             }
             else {
-                this.skipBytes(bytesToSkip, () => {
-                    return this._onTextureDataStart(0);
-                });
+                return this._onTextureDataStart(0);
             }
         }
     };
@@ -99,7 +118,7 @@ class PackageReader extends FileParser {
             currentTextureSize = nextTextureOffset - currentTextureOffset;            
         }
         else {
-            currentTextureSize = 0x1000000000;  // parse till end of file
+            currentTextureSize = this.dataSize - this.currentBufferIndex;  // parse till end of file
         }
 
         this.bytes(currentTextureSize, (buf) => {
