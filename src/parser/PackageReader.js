@@ -48,6 +48,8 @@ class PackageReader extends FileParser {
 
     _onTextureHeader(buf) {
         let texture = new PackageTexture();
+        texture.index = this.file.textures.length;
+        texture.name = texture.index;
         texture.header = buf;
         texture.relativeDataOffset = buf.readUInt32BE(0xA4);
 
@@ -74,7 +76,17 @@ class PackageReader extends FileParser {
             this.bytes(0x2, this._onPackageName);
         }
         else {
-            return this._onTextureDataStart(0);
+            const alignment = 0x20;
+            const bytesToSkip = Math.ceil(this.currentBufferIndex / alignment) * alignment - this.currentBufferIndex;
+
+            if (bytesToSkip <= 0) {
+                return this._onTextureDataStart(0);
+            }
+            else {
+                this.skipBytes(bytesToSkip, () => {
+                    return this._onTextureDataStart(0);
+                });
+            }
         }
     };
 
@@ -97,7 +109,7 @@ class PackageReader extends FileParser {
 
     _onTextureData(buf, index) {
         this.file.textures[index].data = buf;
-        
+
         if ((index + 1) < this.file.numberOfTextures) {
             return this._onTextureDataStart(index + 1);
         }

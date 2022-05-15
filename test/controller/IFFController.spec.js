@@ -8,6 +8,7 @@ const IFFController = require('../../src/controller/IFFController');
 
 const PATH_TO_SIMPLE_IFF = path.join(__dirname, '../data/iff/simple.iff');
 const PATH_TO_TWO_FILE_IFF = path.join(__dirname, '../data/iff/two-files.iff');
+const PATH_TO_IFF_WITH_SCNE = path.join(__dirname, '../data/iff/s000.iff');
 
 let controller = new IFFController();
 
@@ -41,13 +42,13 @@ describe('IFF Controller tests', () => {
         });
     });
 
-    describe('texture', () => {
+    describe('SCNE', () => {
         beforeEach(async () => {
             const reader = new IFFReader();
     
             controller = await new Promise((resolve, reject) => {
                 pipeline(
-                    fs.createReadStream(PATH_TO_TWO_FILE_IFF),
+                    fs.createReadStream(PATH_TO_IFF_WITH_SCNE),
                     reader,
                     (err) => {
                         if (err) reject(err);
@@ -57,9 +58,9 @@ describe('IFF Controller tests', () => {
             });
         });
 
-        it('can get a texture file', async () => {
-            const texture = await controller.getFile('shoe_sole');
-            // expect(texture)
+        it('can get the SCNE controller', async () => {
+            const arenaPackage = await controller.getFileController('arena');
+            expect(arenaPackage.file.textures.length).to.equal(39);
         });
     });
 });

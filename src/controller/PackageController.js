@@ -1,6 +1,6 @@
 const Package = require('../model/general/iff/Package');
 
-class SCNEController {
+class PackageController {
     constructor(packageFile) {
         if (packageFile) {
             this.file = packageFile;
@@ -11,4 +11,4 @@ class SCNEController {
     };    
 };
 
-module.exports = SCNEController;
+module.exports = PackageController;

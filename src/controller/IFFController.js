@@ -1,5 +1,8 @@
+const { Readable, pipeline } = require('stream');
+
 const IFF = require('../model/general/iff/IFF');
 const IFFType = require('../model/general/iff/IFFType');
+const PackageReader = require('../parser/PackageReader');
 
 class IFFController {
     constructor(iffFile) {
@@ -23,13 +26,34 @@ class IFFController {
         return file;
     };
 
-    async getFile(name) {
-        const file = this.getFileRawData(name);
+    async getFileController(name) {
+        let file = await this.getFileRawData(name);
 
         switch(file.type) {
-            case IFFType.TYPES.TXTR:
-                console.log('here');
-                break;
+            case IFFType.TYPES.SCNE:
+                const resourceDataStream = Readable.from(Buffer.concat(file.dataBlocks.map((block) => {
+                    return block.data;
+                })));
+    
+                // this.progressTracker.totalSteps += 1;
+                // this._emitProgress(this.progressTracker.format('Parsing SCNE...'));
+        
+                file = await new Promise((resolve, reject) => {
+                    const parser = new PackageReader();
+        
+                    pipeline(
+                        resourceDataStream,
+                        parser,
+                        (err) => {
+                            if (err) reject(err);
+                            else resolve(parser.controller);
+                        }
+                    )
+                });
+                
+                // this.progressTracker.step();
+                // this._emitProgress(this.progressTracker.format('Done parsing SCNE.'));
+                // return controller;
         }
 
         return file;

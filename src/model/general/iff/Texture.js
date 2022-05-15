@@ -1,7 +1,9 @@
 class Texture {
     constructor() {
-        this.header = null;
+        this.index = 0;
+        this.name = '';
         this.data = null;
+        this.header = null;
     };
 };
 

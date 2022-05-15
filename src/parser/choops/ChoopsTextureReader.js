@@ -31,9 +31,39 @@ class ChoopsTextureReader {
     };
 
     async toDDSFromFile(file) {
-        return new Promise(async (resolve, reject) => {
-            const gtfBuffer = await this.toGTFFromFile(file);
+        const gtfBuffer = await this.toGTFFromFile(file);
+        const result = await this.toDDSFromGTFBuffer(gtfBuffer, file.name);
+        return result;
+    };
 
+    async toGTFFromTexture(texture) {
+        if (!texture.header || !texture.data) { return null; }
+        const textureGtfHeader = texture.header.slice(0x58, 0x70);
+
+        let gtfHeader = Buffer.alloc(0x30);
+
+        // file header
+        gtfHeader.writeUInt32BE(0x01080000, 0x0);
+        gtfHeader.writeUInt32BE(texture.data.length + 0x30, 0x4);
+        gtfHeader.writeUInt32BE(0x1, 0x8);
+
+        // texture header
+        gtfHeader.writeUInt32BE(0x0, 0xC);
+        gtfHeader.writeUInt32BE(0x30, 0x10);
+        gtfHeader.writeUInt32BE(texture.data.length, 0x14);
+        gtfHeader.fill(textureGtfHeader, 0x18);
+
+        return Buffer.concat([gtfHeader, texture.data]);
+    };
+
+    async toDDSFromTexture(texture) {
+        const gtfBuffer = await this.toGTFFromTexture(texture);
+        const result = await this.toDDSFromGTFBuffer(gtfBuffer, texture.name);
+        return result;
+    };
+
+    async toDDSFromGTFBuffer(gtfBuffer, name) {
+        return new Promise(async (resolve, reject) => {
             if (!gtfBuffer) {
                 resolve(null);
             }
@@ -41,7 +71,7 @@ class ChoopsTextureReader {
                 const guid = uuid();
                 const envPath = await envPathUtil.getEnvPath();
     
-                const fileNameFormatted = `${guid}_${file.name}`;
+                const fileNameFormatted = `${guid}_${name}`;
                 const tempGtfFileName = path.join(envPath.temp, `${fileNameFormatted}.gtf`);
                 const tempDdsFileName = path.join(envPath.temp, `${fileNameFormatted}.dds`);
     
@@ -52,7 +82,7 @@ class ChoopsTextureReader {
                     if (err) {
                         reject(err);
                     }
-
+    
                     // console.log(out);
     
                     const ddsData = await fs.readFile(tempDdsFileName);

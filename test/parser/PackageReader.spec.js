@@ -71,8 +71,10 @@ describe('Package Reader tests', () => {
         expect(package.textures[0].header.length).to.equal(0xB0);
         expect(package.textures[0].header.readUInt32BE(0xA4)).to.equal(0x1);
         expect(package.textures[0].data.length).to.equal(0xAB00);
+        expect(package.textures[0].index).to.equal(0);
 
         expect(package.textures[15].header.readUInt32BE(0xA4)).to.equal(0x31F01)
         expect(package.textures[15].data.length).to.equal(0x5580);
+        expect(package.textures[15].index).to.equal(15);
     });
 });
