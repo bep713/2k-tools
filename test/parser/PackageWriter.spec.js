@@ -6,13 +6,14 @@ const { pipeline } = require('stream');
 const PackageReader = require('../../src/parser/PackageReader');
 const PackageWriter = require('../../src/parser/PackageWriter');
 
-let outputBuffer = null, outputBuffers = [];
 const PATH_TO_SCNE = path.join(__dirname, '../data/scne/arena.SCNE');
 
 let writer = new PackageWriter();
 
 describe('Package Writer tests', () => {
     describe('no changes', () => {
+        let outputBuffer = null, outputBuffers = [];
+
         before(async () => {
             await new Promise(async (resolve, reject) => {
                 const reader = new PackageReader({
@@ -116,6 +117,160 @@ describe('Package Writer tests', () => {
 
         it('file size', () => {
             expect(outputBuffer.length).to.equal(0x357500);
+        });
+    });
+
+    describe('one change', () => {
+        let outputBuffer = null, outputBuffers = [];
+
+        before(async () => {
+            await new Promise(async (resolve, reject) => {
+                const reader = new PackageReader({
+                    headerBlockSize: 0x34000,
+                    dataSize: 0x357500
+                });
+    
+                const file = await new Promise((resolve, reject) => {
+                    pipeline(
+                        fs.createReadStream(PATH_TO_SCNE),
+                        reader,
+                        (err) => {
+                            if (err) reject(err);
+                            resolve(reader.file);
+                        }
+                    );
+                });
+
+                file.textures[1].header = Buffer.from(file.textures[0].header);
+                file.textures[1].data = Buffer.from(file.textures[0].data);
+    
+                writer = new PackageWriter(file);
+                const stream = writer.createStream();
+                
+                stream.on('data', (chunk) => {
+                    outputBuffers.push(chunk);
+                });
+    
+                stream.on('end', () => {
+                    outputBuffer = Buffer.concat(outputBuffers);
+                    resolve();
+                });
+            });
+        });
+
+        it('texture headers', () => {
+            // tex #0
+            expect(outputBuffer.readUInt32BE(0x90)).to.equal(0x99D70699);
+            expect(outputBuffer.readUInt32BE(0x94)).to.equal(0x0);
+            expect(outputBuffer.readUInt32BE(0x98)).to.equal(0xA9A886);
+            expect(outputBuffer.readUInt32BE(0x9C)).to.equal(0xA9A886);
+            expect(outputBuffer.readUInt32BE(0x134)).to.equal(0x1);
+
+            // tex #1 = tex #0 now
+            expect(outputBuffer.readUInt32BE(0x140)).to.equal(0x99D70699);
+            expect(outputBuffer.readUInt32BE(0x144)).to.equal(0x0);
+            expect(outputBuffer.readUInt32BE(0x148)).to.equal(0xA9A886);
+            expect(outputBuffer.readUInt32BE(0x14C)).to.equal(0xA9A886);
+            expect(outputBuffer.readUInt32BE(0x1E4)).to.equal(0x323501);        // offset points to the end of the original file
+
+            // tex #15
+            expect(outputBuffer.readUInt32BE(0xAE0)).to.equal(0x35705AC4);
+        });
+
+        it('texture data', () => {
+            // tex #0
+            expect(outputBuffer.readUInt32BE(0x34000)).to.equal(0xA0040004);
+
+            // original tex #1 - still intact
+            expect(outputBuffer.readUInt32BE(0x3EB00)).to.equal(0xCD292B19);    // original data doesn't change
+
+            // tex #15
+            expect(outputBuffer.readUInt32BE(0x65F00)).to.equal(0x6D6BCB5A);
+
+            // real tex #1
+            expect(outputBuffer.readUInt32BE(0x357500)).to.equal(0xA0040004);
+        });
+
+        it('file size', () => {
+            expect(outputBuffer.length).to.equal(0x362000); // tex #1 new size = +0xAB00
+        });
+    });
+
+    describe('changing the last texture', () => {
+        let outputBuffer = null, outputBuffers = [];
+
+        before(async () => {
+            await new Promise(async (resolve, reject) => {
+                const reader = new PackageReader({
+                    headerBlockSize: 0x34000,
+                    dataSize: 0x357500
+                });
+    
+                const file = await new Promise((resolve, reject) => {
+                    pipeline(
+                        fs.createReadStream(PATH_TO_SCNE),
+                        reader,
+                        (err) => {
+                            if (err) reject(err);
+                            resolve(reader.file);
+                        }
+                    );
+                });
+
+                file.textures[38].header = Buffer.from(file.textures[0].header);
+                file.textures[38].data = Buffer.from(file.textures[0].data);
+    
+                writer = new PackageWriter(file);
+                const stream = writer.createStream();
+                
+                stream.on('data', (chunk) => {
+                    outputBuffers.push(chunk);
+                });
+    
+                stream.on('end', () => {
+                    outputBuffer = Buffer.concat(outputBuffers);
+                    resolve();
+                });
+            });
+        });
+
+        it('texture headers', () => {
+            // tex #0
+            expect(outputBuffer.readUInt32BE(0x90)).to.equal(0x99D70699);
+            expect(outputBuffer.readUInt32BE(0x94)).to.equal(0x0);
+            expect(outputBuffer.readUInt32BE(0x98)).to.equal(0xA9A886);
+            expect(outputBuffer.readUInt32BE(0x9C)).to.equal(0xA9A886);
+            expect(outputBuffer.readUInt32BE(0x134)).to.equal(0x1);
+
+            // tex #1
+            expect(outputBuffer.readUInt32BE(0x140)).to.equal(0xABF3B360);
+
+            // tex #15
+            expect(outputBuffer.readUInt32BE(0xAE0)).to.equal(0x35705AC4);
+
+            // tex #38
+            expect(outputBuffer.readUInt32BE(0x1AB0)).to.equal(0x99D70699);
+        });
+
+        it('texture data', () => {
+            // tex #0
+            expect(outputBuffer.readUInt32BE(0x34000)).to.equal(0xA0040004);
+
+            // tex #1
+            expect(outputBuffer.readUInt32BE(0x3EB00)).to.equal(0xCD292B19);
+
+            // tex #15
+            expect(outputBuffer.readUInt32BE(0x65F00)).to.equal(0x6D6BCB5A);
+
+            // tex #38
+            expect(outputBuffer.readUInt32BE(0xE2554)).to.equal(0x28);              // tex 38 first bytes are 0s. Read +D4 offset
+
+            // real tex #38
+            expect(outputBuffer.readUInt32BE(0x357500)).to.equal(0xA0040004);
+        });
+
+        it('file size', () => {
+            expect(outputBuffer.length).to.equal(0x362000);
         });
     });
 });

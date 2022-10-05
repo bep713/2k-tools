@@ -47,6 +47,10 @@ class PackageWriterReadable extends Readable {
 
         this.push(header);
 
+        this.file.textures.sort((a, b) => {
+            return a.index - b.index;
+        });
+
         this.file.textures.forEach((texture) => {
             this.push(texture.header);
         });
@@ -62,6 +66,12 @@ class PackageWriterReadable extends Readable {
         }
 
         this.file.textures.forEach((texture) => {
+            this.push(texture.originalData);
+        });
+
+        this.file.textures.filter((texture) => {
+            return texture.isChanged;
+        }).forEach((texture) => {
             this.push(texture.data);
         });
 

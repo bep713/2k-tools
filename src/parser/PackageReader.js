@@ -63,6 +63,7 @@ class PackageReader extends FileParser {
         texture.name = `texture_${texture.index}`;
         texture.header = buf;
         texture.relativeDataOffset = buf.readUInt32BE(0xA4);
+        texture.originalRelativeDataOffset = texture.relativeDataOffset;
 
         this.file.textures.push(texture);
 
@@ -137,6 +138,8 @@ class PackageReader extends FileParser {
 
     _onTextureData(buf, index) {
         this.file.textures[index].data = buf;
+        this.file.textures[index].originalData = buf;
+        this.file.textures[index].isChanged = false;    // reset changed indicator after populating data
 
         if ((index + 1) < this.file.numberOfTextures) {
             return this._onTextureDataStart(index + 1);

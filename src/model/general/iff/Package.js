@@ -60,7 +60,7 @@ class Package {
         }
         
         let textureDataSize = this.textures.reduce((accum, cur) => {
-            accum += cur.data.length;
+            accum += cur.originalData.length;
             return accum;
         }, 0);
 
@@ -70,10 +70,12 @@ class Package {
             this.offsets.dataBlockSize += this.bufs.postTextureData.length;
         }
 
-        // Have to update each texture relative data offset
-        let runningOffset = 1; // Choops offsets start at 1
+        // Have to update each changed texture's relative data offset
+        let runningOffset = textureDataSize + 1; // Choops offsets start at 1
 
-        this.textures.forEach((texture) => {
+        this.textures.filter((texture) => {
+            return texture.isChanged;
+        }).forEach((texture) => {
             texture.relativeDataOffset = runningOffset - 1;     // This attribute contains the real offset.
             texture.header.writeUInt32BE(runningOffset, 0xA4);
 

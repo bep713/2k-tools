@@ -68,7 +68,7 @@ class IFFController {
                     )
                 });
 
-                this.fileControllerMap[`${name}_2`] = file;
+                this.fileControllerMap[`${name}/2`] = file;
         }
 
         return file;
@@ -85,7 +85,7 @@ class IFFController {
             return new Promise(async (resolve, reject) => {
                 const controller = this.fileControllerMap[key];
     
-                const iffNameData = key.split('_');    // [0] = name, [1] = type
+                const iffNameData = key.split('/');    // [0] = name, [1] = type
                 const iffSubFile = await this.getFileRawData(iffNameData[0], parseInt(iffNameData[1]));
                 
                 if (iffSubFile) {

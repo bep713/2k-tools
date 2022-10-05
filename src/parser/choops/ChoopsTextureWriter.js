@@ -63,6 +63,8 @@ class ChoopsTextureWriter {
         packageFile.header.writeUInt32BE(gtfData.readUInt32BE(0x24), 0x64);
         packageFile.header.writeUInt32BE(gtfData.readUInt32BE(0x28), 0x68);
         packageFile.header.writeUInt32BE(gtfData.readUInt32BE(0x2C), 0x6C);
+
+        packageFile.header.writeUInt32BE(gtfData.readUInt32BE(0x20), 0x90);
         // file.dataBlocks[0].isChanged = true;
 
         const offsetToTexture = gtfData.readUInt32BE(0x10);
