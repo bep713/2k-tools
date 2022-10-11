@@ -11,11 +11,15 @@ class PackageReader extends FileParser {
 
         this.headerBlockSize = options && options.headerBlockSize ? options.headerBlockSize : 0;
         this.dataSize = options && options.dataSize ? options.dataSize : 0;
+        
+        this.textureDataBytesRead = 0;
 
         this.bytes(0x54, this._onFileHeader);
     };
 
     _onFileHeader(buf) {
+        this.textureDataBytesRead = 0;
+
         this.file.nameOffset = buf.readUInt32BE(0x0);
         this.file.unk1 = buf.readUInt32BE(0x4);
         this.file.unk2 = buf.readUInt32BE(0x8);
@@ -75,6 +79,8 @@ class PackageReader extends FileParser {
                 return a.relativeDataOffset - b.relativeDataOffset;
             });
 
+            this.file.textures.forEach((texture, index) => texture.dataIndex = index);
+
             const postTextureHeaderBytes = this.file.nameOffset - 1 - this.currentBufferIndex;
 
             if (postTextureHeaderBytes > 0) {
@@ -122,18 +128,29 @@ class PackageReader extends FileParser {
     _onTextureDataStart(index) {
         let currentTextureOffset = this.file.textures[index].relativeDataOffset - 1;
         let currentTextureSize = 0;
-
-        if (index < this.file.numberOfTextures - 1) {
-            let nextTextureOffset = this.file.textures[index + 1].relativeDataOffset - 1;
-            currentTextureSize = nextTextureOffset - currentTextureOffset;            
+        
+        // Textures can become out of order after importing
+        if (this.textureDataBytesRead < currentTextureOffset) {
+            this.bytes(currentTextureOffset - this.textureDataBytesRead, (buf) => {
+                this.textureDataBytesRead += buf.length;
+                this.file.textures[index].preData = buf;
+                this._onTextureDataStart(index);
+            });
         }
         else {
-            currentTextureSize = this.dataSize - this.currentBufferIndex;  // parse till end of file
+            if (index < this.file.numberOfTextures - 1) {
+                let nextTextureOffset = this.file.textures[index + 1].relativeDataOffset - 1;
+                currentTextureSize = nextTextureOffset - currentTextureOffset;            
+            }
+            else {
+                currentTextureSize = this.dataSize - this.currentBufferIndex;  // parse till end of file
+            }
+    
+            this.bytes(currentTextureSize, (buf) => {
+                this.textureDataBytesRead += buf.length;
+                this._onTextureData(buf, index);
+            });
         }
-
-        this.bytes(currentTextureSize, (buf) => {
-            this._onTextureData(buf, index);
-        });
     };
 
     _onTextureData(buf, index) {
@@ -145,6 +162,10 @@ class PackageReader extends FileParser {
             return this._onTextureDataStart(index + 1);
         }
         else {
+            this.file.textures.sort((a, b) => {
+                return a.index - b.index;
+            });
+
             this.skipBytes(Infinity);
         }
     };

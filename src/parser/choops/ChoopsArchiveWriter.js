@@ -220,6 +220,13 @@ class ChoopsArchiveWriter {
     };
 
     async revertAll() {
+        try {
+            await fsPromises.access(path.join(this.gameDirectoryPath, '0A'), fs.constants.R_OK | fs.constants.W_OK);
+        }
+        catch (err) {
+            throw new Error('Cannot revert because game files are locked for writing.');
+        }
+
         const firstArchiveStat = await fsPromises.stat(path.join(this.gameDirectoryPath, '0A'));
         
         if (firstArchiveStat.size <= 0x10000) {

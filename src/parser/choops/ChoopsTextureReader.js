@@ -31,9 +31,15 @@ class ChoopsTextureReader {
     };
 
     async toDDSFromFile(file) {
-        const gtfBuffer = await this.toGTFFromFile(file);
-        const result = await this.toDDSFromGTFBuffer(gtfBuffer, file.name);
-        return result;
+        try {
+            const gtfBuffer = await this.toGTFFromFile(file);
+            const result = await this.toDDSFromGTFBuffer(gtfBuffer, file.name);
+            return result;
+        }
+        catch (err) {
+            console.error(err);
+            return null;
+        }
     };
 
     async toGTFFromTexture(texture) {
@@ -57,12 +63,18 @@ class ChoopsTextureReader {
     };
 
     async toDDSFromTexture(texture) {
-        const gtfBuffer = await this.toGTFFromTexture(texture);
-        const result = await this.toDDSFromGTFBuffer(gtfBuffer, texture.name);
-        return result;
+        try {
+            const gtfBuffer = await this.toGTFFromTexture(texture);
+            const result = await this.toDDSFromGTFBuffer(gtfBuffer, texture.name);
+            return result;
+        }
+        catch (err) {
+            console.error(err);
+            return null;
+        }
     };
 
-    async toDDSFromGTFBuffer(gtfBuffer, name) {
+    toDDSFromGTFBuffer(gtfBuffer, name) {
         return new Promise(async (resolve, reject) => {
             if (!gtfBuffer) {
                 resolve(null);
@@ -82,20 +94,21 @@ class ChoopsTextureReader {
                     if (err) {
                         reject(err);
                     }
-    
-                    // console.log(out);
-    
-                    const ddsData = await fs.readFile(tempDdsFileName);
-    
-                    try {
-                        fs.rm(tempGtfFileName);
-                        fs.rm(tempDdsFileName);
+                    else {
+                        // console.log(out);
+        
+                        const ddsData = await fs.readFile(tempDdsFileName);
+        
+                        try {
+                            fs.rm(tempGtfFileName);
+                            fs.rm(tempDdsFileName);
+                        }
+                        catch (err) {
+                            
+                        }
+        
+                        resolve(ddsData);
                     }
-                    catch (err) {
-                        
-                    }
-    
-                    resolve(ddsData);
                 });
             }
         });

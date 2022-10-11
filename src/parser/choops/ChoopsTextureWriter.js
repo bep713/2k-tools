@@ -36,17 +36,23 @@ class ChoopsTextureWriter {
     };
 
     async toFileFromDDSPath(ddsPath, file) {
-        const tempGtfFileName = await this.toGtfFromDDS(ddsPath, file.name)
-        const gtfData = await fs.readFile(tempGtfFileName);
-
         try {
-            fs.rm(tempGtfFileName);
+            const tempGtfFileName = await this.toGtfFromDDS(ddsPath, file.name)
+            const gtfData = await fs.readFile(tempGtfFileName);
+    
+            try {
+                fs.rm(tempGtfFileName);
+            }
+            catch (err) {
+                console.error(err);
+            }
+    
+            return this.toFileFromGtf(gtfData, file);
         }
         catch (err) {
             console.error(err);
+            return null;
         }
-
-        return this.toFileFromGtf(gtfData, file);
     };
 
     async toPackageFileFromGtf(gtfData, packageFile) {
@@ -77,20 +83,26 @@ class ChoopsTextureWriter {
     };
 
     async toPackageFileFromDDSPath(ddsPath, packageFile) {
-        const tempGtfFileName = await this.toGtfFromDDS(ddsPath, packageFile.name)
-        const gtfData = await fs.readFile(tempGtfFileName);
-
         try {
-            fs.rm(tempGtfFileName);
+            const tempGtfFileName = await this.toGtfFromDDS(ddsPath, packageFile.name)
+            const gtfData = await fs.readFile(tempGtfFileName);
+    
+            try {
+                fs.rm(tempGtfFileName);
+            }
+            catch (err) {
+                console.error(err);
+            }
+    
+            return this.toPackageFileFromGtf(gtfData, packageFile);
         }
         catch (err) {
             console.error(err);
+            return null;
         }
-
-        return this.toPackageFileFromGtf(gtfData, packageFile);
     };
 
-    async toGtfFromDDS(ddsPath, name) {
+    toGtfFromDDS(ddsPath, name) {
         return new Promise(async (resolve, reject) => {
             const guid = uuid();
             const envPath = await envPathUtil.getEnvPath();

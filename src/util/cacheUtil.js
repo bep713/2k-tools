@@ -18,12 +18,13 @@ module.exports.buildAndSaveCache = (cacheName, data) => {
     });
 };
 
-module.exports.getCache = (cacheName) => {
+module.exports.getCache = (cacheName, cachePathOverride) => {
     return new Promise(async (resolve, reject) => {
         const envPaths = await envPathUtil.getEnvPath();
 
         try {
-            const compressedCache = await fs.readFile(path.join(envPaths.config, cacheName));
+            const cachePath = cachePathOverride ? cachePathOverride : path.join(envPaths.config, cacheName);
+            const compressedCache = await fs.readFile(cachePath);
 
             zlib.gunzip(compressedCache, (err, decompressedData) => {
                 if (err) {

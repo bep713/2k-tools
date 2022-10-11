@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const fsPromies = require('fs/promises');
 const Multistream = require('multistream');
 const { EventEmitter } = require('events');
@@ -234,8 +235,9 @@ class ChoopsController extends EventEmitter {
 
     async getFileController(name) {
         let entry = this.getEntryByName(name);
+        if (entry.controller) { return entry.controller; }
+        
         const resourceRawData = await this.getFileRawData(name);
-
         if (resourceRawData.readUInt32BE(0) === 0xFF3BEF94) {
             const resourceDataStream = Readable.from(resourceRawData);
     
@@ -296,8 +298,16 @@ class ChoopsController extends EventEmitter {
     };
 
     async revertAll() {
-        await this._archiveWriter.revertAll();
-        await this.rebuildCache();
+        try {
+            const reverted = await this._archiveWriter.revertAll();
+            
+            // replace cache with default
+            this.cache = await cacheUtil.getCache(cacheUtil.CACHES.CHOOPS.cache, path.join(__dirname, '../data/choops/ch2k8_default.cache'));
+            await this._saveCache();
+        }
+        catch (err) {
+            throw err;
+        }
     };
 
     _emitProgress(message) {
