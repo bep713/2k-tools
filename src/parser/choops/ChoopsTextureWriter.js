@@ -11,7 +11,7 @@ class ChoopsTextureWriter {
     };
 
     async toFileFromGtf(gtfData, file) {
-        if (file.dataBlocks.length < 2) throw new Error('File does not have expected number of data blocks.');
+        if (file.dataBlocks.length < 1) throw new Error('File does not have expected number of data blocks.');
 
         const oldRemap = file.dataBlocks[0].data.readUInt16BE(0x9);
 
@@ -28,9 +28,10 @@ class ChoopsTextureWriter {
 
         const offsetToTexture = gtfData.readUInt32BE(0x10);
 
-        file.dataBlocks[1].length = gtfData.length - offsetToTexture;
-        file.dataBlocks[1].data = gtfData.slice(offsetToTexture);
-        file.dataBlocks[1].isChanged = true;
+        const textureDataBlockIndex = file.dataBlocks.length === 1 ? 0 : 1;
+        file.dataBlocks[textureDataBlockIndex].length = gtfData.length - offsetToTexture;
+        file.dataBlocks[textureDataBlockIndex].data = gtfData.slice(offsetToTexture);
+        file.dataBlocks[textureDataBlockIndex].isChanged = true;
         
         file.isChanged = true;
     };
