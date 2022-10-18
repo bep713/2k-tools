@@ -40,8 +40,8 @@ class ChoopsReader extends FileParser {
 
         for (let i = 0; i < this.archive.numberOfArchives; i++) {
             const archive = new Archive();
-            archive.sizeRaw = buf.readUInt32BE(currentOffset);
-            archive.zero = buf.readUInt32BE(currentOffset + 4);
+            archive.sizeRaw = buf.readBigInt64BE(currentOffset);
+            // archive.zero = buf.readUInt32BE(currentOffset + 4);
             archive.name = buf.toString('utf8', currentOffset + 8, currentOffset + 16);
             
             this.archive.archives.push(archive);

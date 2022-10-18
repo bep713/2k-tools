@@ -1,7 +1,7 @@
-const fs = require('fs');
 const path = require('path');
+const util = require('util');
+const fs = require('graceful-fs');
 const { pipeline } = require('stream');
-const fsPromises = require('fs/promises');
 const Multistream = require('multistream');
 
 const IFFWriter = require('../../parser/IFFWriter');
@@ -9,6 +9,12 @@ const Archive = require('../../model/choops/archive/Archive');
 const ChoopsTocWriter = require('../../parser/choops/ChoopsTocWriter');
 
 const gameFileUtil = require('../../util/choops/choopsGameFileUtil');
+
+const rm = util.promisify(fs.rm);
+const stat = util.promisify(fs.stat);
+const access = util.promisify(fs.access);
+const rename = util.promisify(fs.rename);
+const writeFile = util.promisify(fs.writeFile);
 
 class ChoopsArchiveWriter {
     constructor(controller) {
@@ -27,12 +33,12 @@ class ChoopsArchiveWriter {
             const files = await gameFileUtil.getGameFilePaths(this.gameDirectoryPath);
             
             // bump each filename up one letter 0A -> 0B, but start from the last one to avoid name conflicts
-            await Promise.all(files.reverse().map((file) => {
-                return fsPromises.rename(file, file.slice(0, -1) + String.fromCharCode(file.slice(-1).charCodeAt(0) + 1));
-            }));
+            for (const file of files.reverse()) {
+                await rename(file, file.slice(0, -1) + String.fromCharCode(file.slice(-1).charCodeAt(0) + 1));
+            }
 
             // update archives in cache
-            let lastArchiveSize = 0;
+            let lastArchiveSize = 0n;
 
             this.cache.archiveCache.archives.forEach((archive, index) => {
                 const tempArchiveSize = archive.sizeRaw;
@@ -47,19 +53,19 @@ class ChoopsArchiveWriter {
             // create 0F archive
             let fArchive = new Archive();
             fArchive.name = '\x000\x00F\x00\x00\x00\x00';
-            fArchive.sizeRaw = lastArchiveSize;
+            fArchive.sizeRaw = BigInt(lastArchiveSize);
             fArchive.zero = 0;
             this.cache.archiveCache.archives.push(fArchive);
 
             // create 0G archive
             let newArchive = new Archive();
             newArchive.name = '\x000\x00G\x00\x00\x00\x00';
-            newArchive.size = 0;
+            newArchive.size = 0n;
             newArchive.zero = 0;
             this.cache.archiveCache.archives.push(newArchive);
 
             // create 0G file
-            await fsPromises.writeFile(path.join(this.gameDirectoryPath, '0G'), Buffer.alloc(0));
+            await writeFile(path.join(this.gameDirectoryPath, '0G'), Buffer.alloc(0));
 
             // update archive number += 1
             this.cache.archiveCache.numberOfArchives += 2;
@@ -69,7 +75,7 @@ class ChoopsArchiveWriter {
         const tocWriter = new ChoopsTocWriter(this.cache.archiveCache);
         const tocLength = tocWriter.calculateTOCLength();
 
-        this.cache.archiveCache.archives[0].size = tocLength;
+        this.cache.archiveCache.archives[0].size = BigInt(tocLength);
 
         if (creatingTocForFirstTime) {
             // modify each cache entry to add TOC size
@@ -134,16 +140,16 @@ class ChoopsArchiveWriter {
         let runningTotalOffset = this.cache.archiveCache.archives.filter((entry) => {
             return entry.name.indexOf('G') < 0;
         }).reduce((accum, cur) => {
-            accum += cur.size;
+            accum += BigInt(cur.size);
             return accum;
-        }, 0);
+        }, 0n);
 
         let modFileArchive = this.cache.archiveCache.archives.find((archive) => {
             return archive.name === '\u00000\u0000G\u0000\u0000\u0000\u0000';
         });
         
         // let runningModArchiveOffset = modFileArchive.size;
-        modFileArchive.size = 0;
+        modFileArchive.size = 0n;
         let runningModArchiveOffset = 0;
 
         // modify cache entry offset and size
@@ -153,7 +159,7 @@ class ChoopsArchiveWriter {
             // modify toc cache
             entry.entry.location = 6;
             entry.entry.offset = runningModArchiveOffset;
-            entry.entry.rawOffset = runningTotalOffset / this.cache.archiveCache.alignment;
+            entry.entry.rawOffset = Number(runningTotalOffset / BigInt(this.cache.archiveCache.alignment));
             entry.entry.size = newEntryLength.allDataLength;
             entry.entry.isSplit = false;
             entry.entry.splitSecondFileSize = 0;
@@ -171,11 +177,11 @@ class ChoopsArchiveWriter {
             archiveCacheEntry.isSplit = false;
             archiveCacheEntry.splitSecondFileSize = 0;
 
-            runningTotalOffset += newEntryLength.totalLength;
+            runningTotalOffset += BigInt(newEntryLength.totalLength);
             runningModArchiveOffset += newEntryLength.totalLength;
 
             // update 0G cache entry
-            modFileArchive.size += newEntryLength.totalLength;
+            modFileArchive.size += BigInt(newEntryLength.totalLength);
         });
 
 
@@ -221,23 +227,25 @@ class ChoopsArchiveWriter {
 
     async revertAll() {
         try {
-            await fsPromises.access(path.join(this.gameDirectoryPath, '0A'), fs.constants.R_OK | fs.constants.W_OK);
+            // need to get all the functions as variables and then execute them
+            // ---->
+            await access(path.join(this.gameDirectoryPath, '0A'), fs.constants.R_OK | fs.constants.W_OK);
         }
         catch (err) {
-            throw new Error('Cannot revert because game files are locked for writing.');
+            throw err;
         }
 
-        const firstArchiveStat = await fsPromises.stat(path.join(this.gameDirectoryPath, '0A'));
+        const firstArchiveStat = await stat(path.join(this.gameDirectoryPath, '0A'));
         
         if (firstArchiveStat.size <= 0x10000) {
-            await fsPromises.rm(path.join(this.gameDirectoryPath, '0A'));
-            await fsPromises.rm(path.join(this.gameDirectoryPath, '0G'));
+            await rm(path.join(this.gameDirectoryPath, '0A'));
+            await rm(path.join(this.gameDirectoryPath, '0G'));
 
-            await fsPromises.rename(path.join(this.gameDirectoryPath, '0B'), path.join(this.gameDirectoryPath, '0A'));
-            await fsPromises.rename(path.join(this.gameDirectoryPath, '0C'), path.join(this.gameDirectoryPath, '0B'));
-            await fsPromises.rename(path.join(this.gameDirectoryPath, '0D'), path.join(this.gameDirectoryPath, '0C'));
-            await fsPromises.rename(path.join(this.gameDirectoryPath, '0E'), path.join(this.gameDirectoryPath, '0D'));
-            await fsPromises.rename(path.join(this.gameDirectoryPath, '0F'), path.join(this.gameDirectoryPath, '0E'));
+            await rename(path.join(this.gameDirectoryPath, '0B'), path.join(this.gameDirectoryPath, '0A'));
+            await rename(path.join(this.gameDirectoryPath, '0C'), path.join(this.gameDirectoryPath, '0B'));
+            await rename(path.join(this.gameDirectoryPath, '0D'), path.join(this.gameDirectoryPath, '0C'));
+            await rename(path.join(this.gameDirectoryPath, '0E'), path.join(this.gameDirectoryPath, '0D'));
+            await rename(path.join(this.gameDirectoryPath, '0F'), path.join(this.gameDirectoryPath, '0E'));
         }
     };
 };

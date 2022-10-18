@@ -45,7 +45,7 @@ class ChoopsTocWriterReadable extends Readable {
         let currentOffset = 0;
 
         this.archive.archives.forEach((theArchive) => {
-            archiveBuffer.writeUInt32BE(theArchive.sizeRaw, currentOffset);
+            archiveBuffer.writeUInt32BE(Number(theArchive.sizeRaw), currentOffset);
             archiveBuffer.writeUInt32BE(theArchive.zero, currentOffset + 4);
             archiveBuffer.write(theArchive.name, currentOffset + 8);
             

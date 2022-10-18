@@ -46,7 +46,7 @@ class ChoopsController extends EventEmitter {
                     archive.name = entry.name;
                     archive.zero = entry.zero;
                     archive.zero = entry.zero;
-                    archive.sizeRaw = entry.sizeRaw;
+                    archive.sizeRaw = BigInt(entry.sizeRaw);
 
                     return archive;
                 });
@@ -268,9 +268,12 @@ class ChoopsController extends EventEmitter {
         }
     };
 
-    async repack() {
+    async repack(saveCache) {
         await this._archiveWriter.write();
-        await this._saveCache();
+
+        if (saveCache === undefined || saveCache === true) {
+            await this._saveCache();
+        }
     };
 
     async revert(name) {
