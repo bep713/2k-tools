@@ -13,6 +13,22 @@ const rewiremock = require('rewiremock/node');
 let fsStub = {
     constants: fs.constants,
     rm: sinon.spy((_1, cb) => { cb(); }),
+    fds: [],
+    open: sinon.spy((_, _2, cb) => {
+        const fd = Math.floor(Math.random() * 50000);
+        fsStub.fds.push(fd);
+
+        if (fsStub.tempWriteStreamLength > 0) {
+            fsStub.writeStreamLengths.push(fsStub.tempWriteStreamLength);
+            fsStub.tempWriteStreamLength = 0;
+        }
+
+        cb(null, fd);
+    }),
+    write: sinon.spy((fd, chunk, cb) => { 
+        fsStub.tempWriteStreamLength += chunk.length;
+        cb(); 
+    }),
     stat: sinon.spy(fs.stat),
     access: sinon.spy(fs.access),
     readdir: sinon.spy(fs.readdir),
@@ -20,7 +36,10 @@ let fsStub = {
     writeFile: sinon.spy((_1, _2, cb) => { cb(); }),
     tempWriteStreamLength: 0,
     writeStreamLengths: [],
-    createWriteStream: sinon.spy((name) => { 
+    createWriteStream: sinon.spy((name) => {
+        fsStub.writeStreamLengths.push(fsStub.tempWriteStreamLength);
+        fsStub.tempWriteStreamLength = 0;
+        
         return new Writable({
             write: (chunk, enc, cb) => {
                 fsStub.tempWriteStreamLength += chunk.length;
@@ -184,17 +203,17 @@ describe('Choops Archive Writer tests', () => {
         });
 
         it('writes changed data to 0G (up to 1GB)', () => {
-            expect(fsStub.createWriteStream.firstCall.args[0]).to.contain('0G');
+            expect(fsStub.open.firstCall.args[0]).to.contain('0G');
             expect(fsStub.writeStreamLengths[0]).to.equal(0x40000000);
         });
 
         it('writes changed data to 0H', () => {
-            expect(fsStub.createWriteStream.secondCall.args[0]).to.contain('0H');
+            expect(fsStub.open.secondCall.args[0]).to.contain('0H');
             expect(fsStub.writeStreamLengths[1]).to.equal(0xB15000);
         });
 
         it('writes the TOC to 0A', () => {
-            expect(fsStub.createWriteStream.thirdCall.args[0]).to.contain('0A');
+            expect(fsStub.createWriteStream.firstCall.args[0]).to.contain('0A');
             expect(fsStub.writeStreamLengths[2]).to.equal(0xD800);
         });
 

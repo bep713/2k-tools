@@ -22,8 +22,8 @@ class IFFController {
         if (this.file.files.length === 0) { throw new Error('The IFF file does not contain any subfiles to read.'); }
 
         const files = this.file.files.filter((file) => {
-            return file.name.toLowerCase() === name.toLowerCase()
-                || file.name.toLowerCase() === name + '\0'.toLowerCase();
+            return file.name.toString().toLowerCase() === name.toLowerCase()
+                || file.name.toString().toLowerCase() === name + '\0'.toLowerCase();
         });
 
         let file;
@@ -43,6 +43,10 @@ class IFFController {
     async getFileController(name, type) {
         // returns either a SCNE controller (for SCNE files only) or raw buffer data
         let file = await this.getFileRawData(name, type);
+
+        if(!file) {
+            return null;
+        }
 
         switch(file.type) {
             case IFFType.TYPES.SCNE:

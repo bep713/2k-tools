@@ -11,6 +11,7 @@ const Archive = require('../../model/choops/archive/Archive');
 const ChoopsTocWriter = require('../../parser/choops/ChoopsTocWriter');
 
 const gameFileUtil = require('../../util/choops/choopsGameFileUtil');
+const SplitWriter = require('../SplitWriter');
 
 const rm = util.promisify(fs.rm);
 const stat = util.promisify(fs.stat);
@@ -209,37 +210,48 @@ class ChoopsArchiveWriter {
         }));
 
         // chunk data files to 1GB each
-        let chunker = new Chunker(MAX_DATAFILE_CHUNK_SIZE, {
-            flush: true
-        });
+        // let chunker = new Chunker(MAX_DATAFILE_CHUNK_SIZE, {
+        //     flush: true
+        // });
 
         // start with F because it'll increment 1 on the first run and switch to 0G.
-        dataFileLetter = 'F';
-        let outputStream;
+        // dataFileLetter = 'F';
+        // let outputStream;
 
-        chunker.on('data', (data) => {
-            dataFileLetter = String.fromCharCode(dataFileLetter.charCodeAt(0) + 1);
-            let dataFileName = `0${dataFileLetter}`;
+        // chunker.on('data', (data) => {
+        //     dataFileLetter = String.fromCharCode(dataFileLetter.charCodeAt(0) + 1);
+        //     let dataFileName = `0${dataFileLetter}`;
 
-            outputStream = fs.createWriteStream(path.join(this.gameDirectoryPath, `${dataFileName}`), {
-                flags: 'w+'
-            });
+        //     outputStream = fs.createWriteStream(path.join(this.gameDirectoryPath, `${dataFileName}`), {
+        //         flags: 'w+'
+        //     });
 
-            pipeline(
-                Readable.from(data),
-                outputStream,
-                (err) => {
-                    if (err) {
-                        console.log(err);
-                    }
-                }
-            );
-        });
+        //     pipeline(
+        //         Readable.from(data),
+        //         outputStream,
+        //         (err) => {
+        //             if (err) {
+        //                 console.log(err);
+        //             }
+        //         }
+        //     );
+        // });
+
+        dataFileLetter = 'G';
 
         await new Promise((resolve, reject) => {
             pipeline(
                 streams,
-                chunker,
+                new SplitWriter({
+                    chunkSize: MAX_DATAFILE_CHUNK_SIZE,
+                    cwd: this.gameDirectoryPath,
+                    firstFileName: `0${dataFileLetter}`,
+                    fileNameFn: () => {
+                        dataFileLetter = String.fromCharCode(dataFileLetter.charCodeAt(0) + 1);
+                        return `0${dataFileLetter}`;
+                    }
+                }),
+                // chunker,
                 // outputStream,
                 (err) => {
                     if (err) reject(err);
