@@ -1,8 +1,10 @@
 const path = require('path');
 const util = require('util');
 const fs = require('graceful-fs');
-const { pipeline } = require('stream');
+const { pipeline, Readable } = require('stream');
+const Chunker = require('stream-chunker');
 const Multistream = require('multistream');
+const Writable = require('stream').Writable;
 
 const IFFWriter = require('../../parser/IFFWriter');
 const Archive = require('../../model/choops/archive/Archive');
@@ -14,7 +16,10 @@ const rm = util.promisify(fs.rm);
 const stat = util.promisify(fs.stat);
 const access = util.promisify(fs.access);
 const rename = util.promisify(fs.rename);
+const readdir = util.promisify(fs.readdir);
 const writeFile = util.promisify(fs.writeFile);
+
+const MAX_DATAFILE_CHUNK_SIZE = 0x40000000;
 
 class ChoopsArchiveWriter {
     constructor(controller) {
@@ -56,19 +61,9 @@ class ChoopsArchiveWriter {
             fArchive.sizeRaw = BigInt(lastArchiveSize);
             fArchive.zero = 0;
             this.cache.archiveCache.archives.push(fArchive);
+            this.cache.archiveCache.numberOfArchives += 1;
 
-            // create 0G archive
-            let newArchive = new Archive();
-            newArchive.name = '\x000\x00G\x00\x00\x00\x00';
-            newArchive.size = 0n;
-            newArchive.zero = 0;
-            this.cache.archiveCache.archives.push(newArchive);
-
-            // create 0G file
-            await writeFile(path.join(this.gameDirectoryPath, '0G'), Buffer.alloc(0));
-
-            // update archive number += 1
-            this.cache.archiveCache.numberOfArchives += 2;
+            await this._createAndSaveNewArchiveFile('0G');
         }
 
         // get TOC size
@@ -137,15 +132,19 @@ class ChoopsArchiveWriter {
         //     return accum;
         // }, 0);
 
+        // start with 0G
+        let dataFileLetter = 'G';
+        let currentLocation = 6;
+
         let runningTotalOffset = this.cache.archiveCache.archives.filter((entry) => {
-            return entry.name.indexOf('G') < 0;
+            return entry.name.indexOf(dataFileLetter) < 0;
         }).reduce((accum, cur) => {
             accum += BigInt(cur.size);
             return accum;
         }, 0n);
 
         let modFileArchive = this.cache.archiveCache.archives.find((archive) => {
-            return archive.name === '\u00000\u0000G\u0000\u0000\u0000\u0000';
+            return archive.name === `\u00000\u0000${dataFileLetter}\u0000\u0000\u0000\u0000`;
         });
         
         // let runningModArchiveOffset = modFileArchive.size;
@@ -153,36 +152,55 @@ class ChoopsArchiveWriter {
         let runningModArchiveOffset = 0;
 
         // modify cache entry offset and size
-        iffWriters.forEach((entry) => {
+        for(const entry of iffWriters) {
             const newEntryLength = entry.writer.lengthInArchive;
+            let newModFileArchiveSize = modFileArchive.size + BigInt(newEntryLength.totalLength);
 
             // modify toc cache
-            entry.entry.location = 6;
+            entry.entry.location = currentLocation;
             entry.entry.offset = runningModArchiveOffset;
             entry.entry.rawOffset = Number(runningTotalOffset / BigInt(this.cache.archiveCache.alignment));
             entry.entry.size = newEntryLength.allDataLength;
-            entry.entry.isSplit = false;
-            entry.entry.splitSecondFileSize = 0;
+
+            // if the entry is determined to be split, calculate the second file size
+            entry.entry.isSplit = newModFileArchiveSize > MAX_DATAFILE_CHUNK_SIZE;
+            entry.entry.splitSecondFileSize = entry.entry.isSplit ? (newModFileArchiveSize - BigInt(MAX_DATAFILE_CHUNK_SIZE)) : 0;
 
             // modify archive cache
             let archiveCacheEntry = this.cache.archiveCache.toc.find((tocEntry) => {
                 return tocEntry.id === entry.entry.id;
             });
 
-            archiveCacheEntry.archiveIndex = 6;
+            archiveCacheEntry.archiveIndex = currentLocation;
             archiveCacheEntry.archiveOffset = runningModArchiveOffset;
             archiveCacheEntry.size = entry.entry.size;
             archiveCacheEntry.offset = runningTotalOffset;
             archiveCacheEntry.rawOffset = entry.entry.rawOffset;
-            archiveCacheEntry.isSplit = false;
-            archiveCacheEntry.splitSecondFileSize = 0;
+            archiveCacheEntry.isSplit = entry.entry.isSplit;
+            archiveCacheEntry.splitSecondFileSize = entry.entry.splitSecondFileSize;
 
             runningTotalOffset += BigInt(newEntryLength.totalLength);
             runningModArchiveOffset += newEntryLength.totalLength;
 
-            // update 0G cache entry
-            modFileArchive.size += BigInt(newEntryLength.totalLength);
-        });
+            // update cache entry
+            if (entry.entry.isSplit) {
+                modFileArchive.size = BigInt(MAX_DATAFILE_CHUNK_SIZE);
+
+                dataFileLetter = String.fromCharCode(dataFileLetter.charCodeAt(0) + 1);
+                currentLocation += 1;
+
+                await this._createAndSaveNewArchiveFile(`0${dataFileLetter}`)
+
+                modFileArchive = this.cache.archiveCache.archives.find((archive) => {
+                    return archive.name === `\u00000\u0000${dataFileLetter}\u0000\u0000\u0000\u0000`;
+                });
+
+                modFileArchive.size = entry.entry.splitSecondFileSize;
+            }
+            else {
+                modFileArchive.size += BigInt(newEntryLength.totalLength);
+            }
+        };
 
 
         // append IFF data to 0G
@@ -190,12 +208,39 @@ class ChoopsArchiveWriter {
             return writer.writer.createStream();
         }));
 
+        // chunk data files to 1GB each
+        let chunker = new Chunker(MAX_DATAFILE_CHUNK_SIZE, {
+            flush: true
+        });
+
+        // start with F because it'll increment 1 on the first run and switch to 0G.
+        dataFileLetter = 'F';
+        let outputStream;
+
+        chunker.on('data', (data) => {
+            dataFileLetter = String.fromCharCode(dataFileLetter.charCodeAt(0) + 1);
+            let dataFileName = `0${dataFileLetter}`;
+
+            outputStream = fs.createWriteStream(path.join(this.gameDirectoryPath, `${dataFileName}`), {
+                flags: 'w+'
+            });
+
+            pipeline(
+                Readable.from(data),
+                outputStream,
+                (err) => {
+                    if (err) {
+                        console.log(err);
+                    }
+                }
+            );
+        });
+
         await new Promise((resolve, reject) => {
             pipeline(
                 streams,
-                fs.createWriteStream(path.join(this.gameDirectoryPath, '0G'), {
-                    flags: 'w+'
-                }),
+                chunker,
+                // outputStream,
                 (err) => {
                     if (err) reject(err);
                     else resolve();
@@ -227,19 +272,24 @@ class ChoopsArchiveWriter {
 
     async revertAll() {
         try {
-            // need to get all the functions as variables and then execute them
-            // ---->
             await access(path.join(this.gameDirectoryPath, '0A'), fs.constants.R_OK | fs.constants.W_OK);
         }
         catch (err) {
             throw err;
         }
-
+        
         const firstArchiveStat = await stat(path.join(this.gameDirectoryPath, '0A'));
         
         if (firstArchiveStat.size <= 0x10000) {
-            await rm(path.join(this.gameDirectoryPath, '0A'));
-            await rm(path.join(this.gameDirectoryPath, '0G'));
+            const dirs = await readdir(this.gameDirectoryPath);
+            const dirsToRemove = dirs.filter((dir) => {
+                return (dir[0] === '0' 
+                    && (dir[1] === 'A') || dir[1] >= 'G');
+            });
+
+            for (const dir of dirsToRemove) {
+                await rm(path.join(this.gameDirectoryPath, dir));
+            }
 
             await rename(path.join(this.gameDirectoryPath, '0B'), path.join(this.gameDirectoryPath, '0A'));
             await rename(path.join(this.gameDirectoryPath, '0C'), path.join(this.gameDirectoryPath, '0B'));
@@ -247,6 +297,25 @@ class ChoopsArchiveWriter {
             await rename(path.join(this.gameDirectoryPath, '0E'), path.join(this.gameDirectoryPath, '0D'));
             await rename(path.join(this.gameDirectoryPath, '0F'), path.join(this.gameDirectoryPath, '0E'));
         }
+    };
+
+    async _createAndSaveNewArchiveFile(name) {
+        let unicodeName = name.split('').map((char) => {
+            return '\x00' + char;
+        }).join('');
+
+        unicodeName += '\x00\x00\x00\x00';
+
+        // create archive
+        let newArchive = new Archive();
+        newArchive.name = unicodeName;
+        newArchive.size = 0n;
+        newArchive.zero = 0;
+        this.cache.archiveCache.archives.push(newArchive);
+        this.cache.archiveCache.numberOfArchives += 1;
+
+        // create the file
+        await writeFile(path.join(this.gameDirectoryPath, name), Buffer.alloc(0));
     };
 };
 
