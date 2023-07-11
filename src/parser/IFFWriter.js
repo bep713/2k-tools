@@ -16,7 +16,11 @@ class IFFWriter {
             return accum;
         }, 0);
 
-        const allDataLength = this.file.headerSize + totalBlockLength + this.file.nameDataBuf.length;
+        let allDataLength = this.file.headerSize + totalBlockLength;
+        if (this.file.nameDataBuf) {
+            allDataLength += this.file.nameDataBuf.length;
+        }
+        
         let totalLength = allDataLength;
 
         if (this.alignment && totalLength % this.alignment !== 0) {
@@ -98,8 +102,10 @@ class IFFWriterReadable extends Readable {
             runningLength += block.data.length;
         });
 
-        this.push(this.file.nameDataBuf);
-        runningLength += this.file.nameDataBuf.length;
+        if (this.file.nameDataBuf) {
+            this.push(this.file.nameDataBuf);
+            runningLength += this.file.nameDataBuf.length;
+        }
 
         const remainingDataLength = this.size - runningLength;
         this.push(Buffer.alloc(remainingDataLength));

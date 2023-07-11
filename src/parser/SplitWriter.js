@@ -27,10 +27,12 @@ class SplitWriter extends Writable {
 
     async _construct(cb) {
         await this._openOutputFile(path.join(this.opts.cwd, this.opts.firstFileName));
+        // console.log(`CURRENT FD IN _CONSTRUCT: ${this.currentFd}`);
         cb();
     };
 
     async _write(chunk, enc, cb) {
+        // console.log(`CURRENT FD IN _WRITE: ${this.currentFd}`);
         if (this.currentFileSize + chunk.length > this.opts.chunkSize) {
             const firstChunkSize = this.opts.chunkSize - this.currentFileSize;
             await write(this.currentFd, chunk.slice(0, firstChunkSize));
@@ -52,16 +54,23 @@ class SplitWriter extends Writable {
 
         if(this.opts.fileNameFn) {
             nextFileName = this.opts.fileNameFn(this.currentFileName);
+            // console.log(`Next File Name: ${nextFileName}`);
         }
 
         await this._openOutputFile(path.join(this.opts.cwd, nextFileName));
     };
 
     async _openOutputFile(filePath) {
-        this.currentFd = await open(filePath, 'w+');
-        this.currentFileName = filePath;
-        this.currentFileSize = 0;
-        this.filePaths.push(filePath);
+        try {
+            this.currentFd = await open(filePath, 'w+');
+            // console.log(`CURRENT FD IN _OPENOUTPUTFILE: ${this.currentFd}. FilePath: ${filePath}`);
+            this.currentFileName = filePath;
+            this.currentFileSize = 0;
+            this.filePaths.push(filePath);
+        }
+        catch (err) {
+            throw err;
+        }
     };
 };
 

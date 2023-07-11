@@ -6,7 +6,7 @@ const { pipeline } = require('stream');
 const PackageReader = require('../../src/parser/PackageReader');
 const PackageWriter = require('../../src/parser/PackageWriter');
 
-const PATH_TO_SCNE = path.join(__dirname, '../data/scne/arena.SCNE');
+const PATH_TO_SCNE = path.join(__dirname, '../data/scne/arena-without-tool-wrap.SCNE');
 
 let writer = new PackageWriter();
 

@@ -1,5 +1,7 @@
 const { Readable } = require('stream');
 
+const archiveConfig = require('../../util/archiveConfig');
+
 const FileParser = require('../FileParser');
 const Archive = require('../../model/choops/archive/Archive');
 const GameArchive = require('../../model/choops/archive/GameArchive');
@@ -15,6 +17,16 @@ class ChoopsReader extends FileParser {
         this.emitData = options ? options.emitData : false;
         this.stopAfterToc = options ? options.stopAfterToc : false;
         this.offsetsToExtract = options ? options.offsetsToExtract : [];
+
+        this.gameName = options ? options.gameName ? options.gameName : 'default' : 'default';
+        this.archiveConfig = options ? options.archiveConfig ? options.archiveConfig : archiveConfig[this.gameName] : archiveConfig[this.gameName];
+        this.tocEntrySize = 0;
+        
+        if (this.archiveConfig.toc) {
+            for (const [key, val] of Object.entries(this.archiveConfig.toc)) {
+                this.tocEntrySize += val.size;
+            }
+        }
 
         this.bytes(0x18, this._onHeader);
     };
@@ -40,7 +52,7 @@ class ChoopsReader extends FileParser {
 
         for (let i = 0; i < this.archive.numberOfArchives; i++) {
             const archive = new Archive();
-            archive.sizeRaw = buf.readBigInt64BE(currentOffset);
+            archive.sizeRaw = BigInt(buf.readUInt32BE(currentOffset));
             // archive.zero = buf.readUInt32BE(currentOffset + 4);
             archive.name = buf.toString('utf8', currentOffset + 8, currentOffset + 16);
             
@@ -48,7 +60,7 @@ class ChoopsReader extends FileParser {
             currentOffset += 16;
         }
 
-        this.bytes(this.archive.numberOfFiles * 0x10, this._onToc);
+        this.bytes(this.archive.numberOfFiles * this.tocEntrySize, this._onToc);
     };
 
     _onToc(buf) {
@@ -60,11 +72,25 @@ class ChoopsReader extends FileParser {
         for (let i = 0; i < this.archive.numberOfFiles; i++) {
             const tocEntry = new ArchiveTOCEntry();
             tocEntry.id = i;
-            tocEntry.nameHash = buf.readUInt32BE(currentOffset);
-            tocEntry.rawOffset = buf.readUInt32BE(currentOffset + 4);
-            tocEntry.offset = tocEntry.rawOffset * this.archive.alignment;
-            tocEntry.zero = buf.readUInt32BE(currentOffset + 8);
-            tocEntry.size = buf.readUInt32BE(currentOffset + 12);
+
+            for (const [key, val] of Object.entries(this.archiveConfig.toc)) {
+                tocEntry[key] = buf.readUInt32BE(currentOffset + val.offset);
+            }
+
+            if (tocEntry.rawOffset) {
+                tocEntry.offset = tocEntry.rawOffset * this.archive.alignment;
+            }
+
+            if (!this.archiveConfig.zero) {
+                // NBA 2K8 header: only 12 bytes each, size multiplied by alignment as well as offset
+                tocEntry.size *= this.archive.alignment;
+            }
+
+            // tocEntry.nameHash = buf.readUInt32BE(currentOffset + this.archiveConfig.toc.nameHash.offset);
+            // tocEntry.rawOffset = buf.readUInt32BE(currentOffset + this.archiveConfig.toc.rawOffset.offset);
+            // tocEntry.offset = tocEntry.rawOffset * this.archive.alignment;
+            // tocEntry.zero = buf.readUInt32BE(currentOffset + this.archiveConfig.toc.zero.offset);
+            // tocEntry.size = buf.readUInt32BE(currentOffset + this.archiveConfig.toc.size.offset);
 
             const archiveDetails = this._getArchiveDetailsFromOffset(tocEntry.offset, tocEntry.size);
             tocEntry.archiveIndex = archiveDetails.index;
@@ -73,7 +99,7 @@ class ChoopsReader extends FileParser {
             tocEntry.splitSecondFileSize = archiveDetails.splitSecondFileSize;
 
             this.archive.toc.push(tocEntry);
-            currentOffset += 16;
+            currentOffset += this.tocEntrySize;
         }
 
         this.archive.toc.sort((a, b) => {
@@ -130,11 +156,11 @@ class ChoopsReader extends FileParser {
         let splitSecondFileSize = 0;
 
         for (let i = 0; i < this.archive.archives.length; i++) {
-            runningOffset += this.archive.archives[i].size;
+            runningOffset += Number(this.archive.archives[i].size);
 
             if (offset < runningOffset) {
                 archiveFileIndex = i;
-                archiveOffset = offset - (runningOffset - this.archive.archives[i].size);
+                archiveOffset = offset - (runningOffset - Number(this.archive.archives[i].size));
 
                 if (archiveOffset + size > runningOffset) {
                     isSplit = true;

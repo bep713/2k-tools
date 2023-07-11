@@ -5,8 +5,9 @@ const IFFController = require('../controller/IFFController');
 const IFFDataFile = require('../model/general/iff/IFFDataFile');
 const IFFDataFileBlock = require('../model/general/iff/IFFDataFileBlock');
 
-const h7aCompressionUtil = require('../util/h7aCompressionUtil');
+const EndianUtil = require('../util/endianUtil');
 const IFFType = require('../model/general/iff/IFFType');
+const h7aCompressionUtil = require('../util/h7aCompressionUtil');
 
 class IFFReader extends FileParser {
     constructor(options) {
@@ -14,20 +15,31 @@ class IFFReader extends FileParser {
 
         this.controller = new IFFController();
         this.file = this.controller.file;
+        this.hasFileNameData = false;
         this.decompressBlocks = options && options.decompressBlocks !== undefined ? options.decompressBlocks : true;
+        this.endian = options && options.endian ? options.endian : EndianUtil.BIG;
 
         this.bytes(0x20, this._onFileHeader);
     };
 
+    _readUInt32(buf, index) {
+        if (this.endian === EndianUtil.BIG) {
+            return buf.readUInt32BE(index);
+        }
+        else {
+            return buf.readUInt32LE(index);
+        }
+    };
+
     _onFileHeader(buf) {
-        this.file.magic = buf.readUInt32BE(0);
-        this.file.headerSize = buf.readUInt32BE(4);
-        this.file.fileLength = buf.readUInt32BE(8);
-        this.file.zero = buf.readUInt32BE(12);
-        this.file.blockCount = buf.readUInt32BE(16);
-        this.file.unk1 = buf.readUInt32BE(20);
-        this.file.fileCount = buf.readUInt32BE(24);
-        this.file.unk2 = buf.readUInt32BE(28);
+        this.file.magic = this._readUInt32(buf, 0);
+        this.file.headerSize = this._readUInt32(buf, 4);
+        this.file.fileLength = buf.readUInt32BE(8);         // File length is always BE
+        this.file.zero = this._readUInt32(buf, 12);
+        this.file.blockCount = this._readUInt32(buf, 16);
+        this.file.unk1 = this._readUInt32(buf, 20);
+        this.file.fileCount = this._readUInt32(buf, 24);
+        this.file.unk2 = this._readUInt32(buf, 28);
 
         if (this.file.blockCount > 0) {
             this.bytes(this.file.blockCount * 0x20, this._onFileBlocks);
@@ -43,14 +55,14 @@ class IFFReader extends FileParser {
         for (let i = 0; i < this.file.blockCount; i++) {
             let block = new IFFBlock();
             block.index = i;
-            block.name = buf.readUInt32BE(currentOffset);
-            block.type = buf.readUInt32BE(currentOffset + 4);
-            block.unk1 = buf.readUInt32BE(currentOffset + 8);
-            block.uncompressedLength = buf.readUInt32BE(currentOffset + 12);
-            block.unk2 = buf.readUInt32BE(currentOffset + 16);
-            block.startOffset = buf.readUInt32BE(currentOffset + 20);
-            block.compressedLength = buf.readUInt32BE(currentOffset + 24);
-            block.isIndexed = buf.readUInt32BE(currentOffset + 28);
+            block.name = this._readUInt32(buf, currentOffset);
+            block.type = this._readUInt32(buf, currentOffset + 4);
+            block.unk1 = this._readUInt32(buf, currentOffset + 8);
+            block.uncompressedLength = this._readUInt32(buf, currentOffset + 12);
+            block.unk2 = this._readUInt32(buf, currentOffset + 16);
+            block.startOffset = this._readUInt32(buf, currentOffset + 20);
+            block.compressedLength = this._readUInt32(buf, currentOffset + 24);
+            block.isIndexed = this._readUInt32(buf, currentOffset + 28);
 
             this.file.blocks.push(block);
             currentOffset += 0x20;
@@ -62,7 +74,6 @@ class IFFReader extends FileParser {
 
         this.bytes(this.file.fileCount * 4, function (buf) {
             this.file.dataFileOffsetBuf = buf;
-            
             this.bytes(this.file.headerSize - this.currentBufferIndex, this._onDataHeaderBlocks);
         }.bind(this));
     };
@@ -73,13 +84,13 @@ class IFFReader extends FileParser {
         for (let i = 0; i < this.file.fileCount; i++) {
             let file = new IFFDataFile();
             file.index = i;
-            file.id = buf.readUInt32BE(currentOffset);
-            file.typeRaw = buf.readUInt32BE(currentOffset + 4);
-            file.offsetCount = buf.readUInt32BE(currentOffset + 8);
+            file.id = this._readUInt32(buf, currentOffset);
+            file.typeRaw = this._readUInt32(buf, currentOffset + 4);
+            file.offsetCount = this._readUInt32(buf, currentOffset + 8);
 
             for (let j = 0; j < file.offsetCount; j++) {
                 let dataBlock = new IFFDataFileBlock();
-                dataBlock.offset = buf.readUInt32BE(currentOffset + 12 + (j * 4));
+                dataBlock.offset = this._readUInt32(buf, currentOffset + 12 + (j * 4));
                 file.dataBlocks.push(dataBlock);
             }
 
@@ -151,7 +162,6 @@ class IFFReader extends FileParser {
         }
 
         block.isChanged = false;
-
         this.emit('block-data', block);
 
         if (block.index + 1 < this.file.blockCount) {
@@ -163,6 +173,7 @@ class IFFReader extends FileParser {
     };
 
     _decompressBlockData(buf, block) {
+        // compressed block data is always in BE
         const magic = buf.readUInt32BE(0);
         const uncompressedLength = buf.readUInt32BE(4);
         const compressedLength = buf.readUInt32BE(8);
@@ -174,7 +185,8 @@ class IFFReader extends FileParser {
     };
 
     _onFileNameDefinitionHeader(buf) {
-        const magic = buf.readUInt32BE(0);
+        this.hasFileNameData = true;
+        const magic = this._readUInt32(buf, 0);
         const size = buf.readUInt32LE(4);
 
         this.file.nameDataBuf = buf;
@@ -184,6 +196,7 @@ class IFFReader extends FileParser {
         }
         else {
             this._setDefaultFileNames();
+            this.skipBytes(Infinity);
         }
     };
 
@@ -208,15 +221,15 @@ class IFFReader extends FileParser {
             currentOffset += 4;
         }
 
-        this._emitFiles();
+        // this._emitFiles();
     };
 
     _setDefaultFileNames() {
         this.file.files.forEach((file, index) => {
-            file.name = index;
+            file.name = index.toString();
         });
 
-        this._emitFiles();
+        // this._emitFiles();
     };
 
     _emitFiles() {
@@ -229,8 +242,20 @@ class IFFReader extends FileParser {
             this.emit('file-data', file);
         });
 
-        this.skipBytes(Infinity);
+        // this.skipBytes(Infinity);
     };
+
+    _final(cb) {
+        if (this.hasFileNameData) {
+            this._emitFiles();
+        }
+        else {
+            this._setDefaultFileNames();
+            this._emitFiles();
+        }
+
+        cb();
+    }
 };
 
 module.exports = IFFReader;

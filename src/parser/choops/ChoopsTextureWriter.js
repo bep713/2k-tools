@@ -30,7 +30,15 @@ class ChoopsTextureWriter {
 
         const textureDataBlockIndex = file.dataBlocks.length === 1 ? 0 : 1;
         file.dataBlocks[textureDataBlockIndex].length = gtfData.length - offsetToTexture;
-        file.dataBlocks[textureDataBlockIndex].data = gtfData.slice(offsetToTexture);
+
+        if (textureDataBlockIndex === 0) {
+            file.dataBlocks[textureDataBlockIndex].data = 
+                Buffer.concat([file.dataBlocks[textureDataBlockIndex].data.slice(0, 0xB0), gtfData.slice(offsetToTexture)]);
+        }
+        else {
+            file.dataBlocks[textureDataBlockIndex].data = gtfData.slice(offsetToTexture);
+        }
+
         file.dataBlocks[textureDataBlockIndex].isChanged = true;
         
         file.isChanged = true;

@@ -40,6 +40,7 @@ class FileParser extends stream.Writable {
 
     emitProgress(message) {
         this.emit('progress', this.progressTracker.format(message));
+        this._
     };
 };
 

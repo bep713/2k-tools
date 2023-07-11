@@ -35,7 +35,7 @@ describe('Choops Texture Writer tests', () => {
         expect(file.dataBlocks[0].data.readUInt32BE(0x50)).to.equal(0);
         expect(file.dataBlocks[0].data.readUInt32BE(0x54)).to.equal(0);
         expect(file.dataBlocks[0].data.readUInt32BE(0x58)).to.equal(0x88090200);
-        expect(file.dataBlocks[0].data.readUInt32BE(0x5C)).to.equal(0x0000AAE4);
+        expect(file.dataBlocks[0].data.readUInt32BE(0x5C)).to.equal(0); // writer will use the old re-map, the buffer is filled with zeroes, so this is 0.
         expect(file.dataBlocks[0].data.readUInt32BE(0x60)).to.equal(0x01000100);
         expect(file.dataBlocks[0].data.readUInt32BE(0x64)).to.equal(0x00010000);
         expect(file.dataBlocks[0].data.readUInt32BE(0x68)).to.equal(0x00000000);

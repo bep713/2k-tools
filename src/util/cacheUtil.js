@@ -40,6 +40,14 @@ module.exports.getCache = (cacheName, cachePathOverride) => {
     });
 };
 
+module.exports.getFormattedCacheName = (gameName) => {
+    if (!gameName) {
+        gameName = 'default';
+    }
+
+    return `${gameName.replace(/\s+/g, '')}.cache`;
+};
+
 module.exports.CACHES = {
     CHOOPS: {
         cache: 'choops.cache'

@@ -47,13 +47,13 @@ describe('ChoopsParser unit tests', () => {
         expect(archive.archives.length).to.equal(5);
         
         const firstArchive = archive.archives[0];
-        expect(firstArchive.sizeRaw).to.equal(0x80000);
-        expect(firstArchive.size).to.equal(1073741824);
+        expect(firstArchive.sizeRaw).to.equal(0x80000n);
+        expect(firstArchive.size).to.equal(1073741824n);
         expect(firstArchive.zero).to.equal(0);
         expect(firstArchive.name).to.equal('\u00000\u0000A\u0000\u0000\u0000\u0000');
 
-        expect(archive.archives[4].sizeRaw).to.equal(0x3D6B0);
-        expect(archive.archives[4].size).to.equal(515211264);
+        expect(archive.archives[4].sizeRaw).to.equal(0x3D6B0n);
+        expect(archive.archives[4].size).to.equal(515211264n);
         expect(archive.archives[4].name).to.equal('\u00000\u0000E\u0000\u0000\u0000\u0000');
     });
 
@@ -63,7 +63,6 @@ describe('ChoopsParser unit tests', () => {
 
         const firstToc = toc[0];
         expect(firstToc.nameHash).to.equal(0xB4720031);
-        expect(firstToc.name).to.equal('loading.iff');
         expect(firstToc.rawOffset).to.equal(0x1B);
         expect(firstToc.offset).to.equal(0xD800);
         expect(firstToc.zero).to.equal(0x0);
@@ -75,7 +74,6 @@ describe('ChoopsParser unit tests', () => {
 
         const toc400 = toc[400];
         expect(toc400.nameHash).to.equal(0x361636C3);
-        expect(toc400.name).to.equal('711');
         expect(toc400.rawOffset).to.equal(0xD3691);
         expect(toc400.offset).to.equal(0x69B48800)
         expect(toc400.zero).to.equal(0x0);
@@ -86,7 +84,7 @@ describe('ChoopsParser unit tests', () => {
         expect(toc400.splitSecondFileSize).to.equal(0);
 
         const global = toc.find((theToc) => {
-            return theToc.name === 'global.iff';
+            return theToc.archiveOffset === 0x3EEAE800;
         });
 
         expect(global.archiveIndex).to.equal(0);
@@ -96,7 +94,6 @@ describe('ChoopsParser unit tests', () => {
 
         const lastToc = toc[3375];
         expect(lastToc.nameHash).to.equal(0xEA4B7257);
-        expect(lastToc.name).to.equal('weeklyshow.iff');
         expect(lastToc.rawOffset).to.equal(0x23D57E);
         expect(lastToc.offset).to.equal(0x11EABF000);
         expect(lastToc.zero).to.equal(0x0);
@@ -120,11 +117,11 @@ describe('ChoopsParser unit tests', () => {
                     offset: 2888611840,
                     rawOffset: 1410455,
                     size: 2925604,
+                    name: '',
                     nameHash: 1569367355,
                     zero: 0,
                     isSplit: false,
                     splitSecondFileSize: 0,
-                    name: '1229',
                     id: 1229
                 }
             });

@@ -18,7 +18,7 @@ class IFFController {
     };
 
     async getFileRawData(name, type) {
-        if (!name) { throw new Error('getResourceRawData() takes in a mandatory `name` parameter.'); }
+        if (name === null || name === undefined) { throw new Error('getResourceRawData() takes in a mandatory `name` parameter.'); }
         if (this.file.files.length === 0) { throw new Error('The IFF file does not contain any subfiles to read.'); }
 
         const files = this.file.files.filter((file) => {

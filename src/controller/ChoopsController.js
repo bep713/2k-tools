@@ -7,9 +7,11 @@ const { pipeline, Readable } = require('stream');
 
 const cacheUtil = require('../util/cacheUtil');
 const hashUtil = require('../util/2kHashUtil');
+const bigIntUtil = require('../util/bigIntUtil');
 const gameFileUtil = require('../util/choops/choopsGameFileUtil');
 
 const IFFReader = require('../parser/IFFReader');
+const IFFType = require('../model/general/iff/IFFType');
 const Archive = require('../model/choops/archive/Archive');
 const ChoopsReader = require('../parser/choops/ChoopsReader');
 const ChoopsCache = require('../model/choops/general/ChoopsCache');
@@ -18,12 +20,17 @@ const ChoopsArchiveWriter = require('../parser/choops/ChoopsArchiveWriter');
 const ChoopsCacheEntry = require('../model/choops/general/ChoopsCacheEntry');
 
 class ChoopsController extends EventEmitter {
-    constructor(gameDirectoryPath) {
+    constructor(gameDirectoryPath, gameName) {
         super();
 
         this.data = [];
         this.cache = null;
-        this.parser = new ChoopsReader();
+        this.gameName = gameName;
+        
+        this.parser = new ChoopsReader({
+            gameName: this.gameName
+        });
+
         this.gameDirectoryPath = gameDirectoryPath;
         this.progressTracker = new ProgressTracker();
         this._archiveWriter = new ChoopsArchiveWriter(this);
@@ -39,7 +46,7 @@ class ChoopsController extends EventEmitter {
         else {
             try {
                 this._emitProgress(this.progressTracker.format('Cache found, reading data from cache...'));
-                this.cache = await cacheUtil.getCache(cacheUtil.CACHES.CHOOPS.cache);
+                this.cache = await cacheUtil.getCache(cacheUtil.getFormattedCacheName(this.gameName));
 
                 this.cache.archiveCache.archives = this.cache.archiveCache.archives.map((entry) => {
                     let archive = new Archive();
@@ -166,7 +173,7 @@ class ChoopsController extends EventEmitter {
             delete cacheEntry.controller;
         });
 
-        await cacheUtil.buildAndSaveCache(cacheUtil.CACHES.CHOOPS.cache, cacheToSave);
+        await cacheUtil.buildAndSaveCache(cacheUtil.getFormattedCacheName(this.gameName), cacheToSave);
     };
 
     getEntryByName(name) {
@@ -246,13 +253,31 @@ class ChoopsController extends EventEmitter {
     
             let controller = await new Promise((resolve, reject) => {
                 const parser = new IFFReader();
+                let pendingFilePromises = [];
+
+                parser.on('file-data', (file) => {
+                    pendingFilePromises.push((async () => {
+                        if (file.type === IFFType.TYPES.UNKNOWN && file.typeRaw) {
+                            // if the file doesn't have the name definition, try to find and set the
+                            // file type here based on the type hash in the IFF header.
+                            const type = await hashUtil.hashLookup(file.typeRaw);
+                            
+                            if (type) {
+                                file.type = IFFType.stringToType(type.str);
+                            }
+                        }
+                    })());
+                });
     
                 pipeline(
                     resourceDataStream,
                     parser,
-                    (err) => {
+                    async (err) => {
                         if (err) reject(err);
-                        else resolve(parser.controller);
+                        else {
+                            await Promise.all(pendingFilePromises);
+                            resolve(parser.controller);
+                        }
                     }
                 )
             });
